@@ -68,10 +68,30 @@ export class Unit {
 
   /**
    * Get valid movement range for this unit
+   * @param {number} totalPaths - Total number of paths/rows on the board
    * @returns {Array} Array of {dx, dy} offsets
    */
-  getMovementOptions() {
+  getMovementOptions(totalPaths = 5) {
     const options = [];
+    
+    // Special case: units at spawn (x=-1)
+    if (this.x === -1) {
+      if (this.type === UnitType.SPRINTER) {
+        // Sprinter can reach column 0 or 1 (any row)
+        for (let targetY = 0; targetY < totalPaths; targetY++) {
+          const dy = targetY - this.y;
+          options.push({ dx: 1, dy: dy });  // Column 0
+          options.push({ dx: 2, dy: dy });  // Column 1
+        }
+      } else {
+        // Basic unit can only move to column 0 (any row)
+        for (let targetY = 0; targetY < totalPaths; targetY++) {
+          const dy = targetY - this.y;
+          options.push({ dx: 1, dy: dy });
+        }
+      }
+      return options;
+    }
     
     switch (this.type) {
       case UnitType.BASIC:
@@ -81,23 +101,27 @@ export class Unit {
           { dx: 0, dy: 1 },  // Down
           { dx: 0, dy: -1 }  // Up
         );
-        // Can move left unless at x=1 (would go back to spawn)
-        if (this.x > 1) {
+        // Can move left unless at x=0 (would go back to spawn)
+        if (this.x > 0) {
           options.push({ dx: -1, dy: 0 }); // Left
         }
         break;
         
       case UnitType.SPRINTER:
-        // Returns same as basic for single-tile options
-        // The double-move is handled by game logic
+        // Sprinter moves exactly 2 tiles: dx=±2, dy=±2, or dx=±1 AND dy=±1
         options.push(
-          { dx: 1, dy: 0 },
-          { dx: 0, dy: 1 },
-          { dx: 0, dy: -1 }
+          // 2 tiles horizontally
+          { dx: 2, dy: 0 },   // Right 2
+          { dx: -2, dy: 0 },  // Left 2
+          // 2 tiles vertically
+          { dx: 0, dy: 2 },   // Down 2
+          { dx: 0, dy: -2 },  // Up 2
+          // Diagonal (1+1)
+          { dx: 1, dy: 1 },   // Right-Down
+          { dx: 1, dy: -1 },  // Right-Up
+          { dx: -1, dy: 1 },  // Left-Down
+          { dx: -1, dy: -1 }  // Left-Up
         );
-        if (this.x > 1) {
-          options.push({ dx: -1, dy: 0 });
-        }
         break;
     }
     

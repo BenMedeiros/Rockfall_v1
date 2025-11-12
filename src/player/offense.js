@@ -51,18 +51,39 @@ export class OffensePlayer {
     if (!unit) return [];
 
     const moves = [];
-    const options = unit.getMovementOptions();
+    const options = unit.getMovementOptions(this.gameState.config.totalPaths);
+    
+    // Get all alive units for collision detection
+    const aliveUnits = this.gameState.getAliveUnits();
 
     for (const move of options) {
       const targetX = unit.x + move.dx;
       const targetY = unit.y + move.dy;
 
-      // Check if position is valid
-      if (this.gameState.board.isValidPosition(targetX, targetY) || 
-          this.gameState.board.isDefenseEndzone(targetX)) {
+      // Check if moving to defense endzone (single spot, any y from last column can reach it)
+      if (this.gameState.board.isDefenseEndzone(targetX)) {
+        // Only add defense endzone once, at a normalized position
+        const defenseEndzonePos = { x: targetX, y: Math.floor(this.gameState.config.totalPaths / 2) };
+        if (!moves.some(m => this.gameState.board.isDefenseEndzone(m.x))) {
+          moves.push(defenseEndzonePos);
+        }
+        continue;
+      }
+
+      // Check if position is valid board tile
+      if (this.gameState.board.isValidPosition(targetX, targetY)) {
         // Check if within bounds for y
         if (targetY >= 0 && targetY < this.gameState.config.totalPaths) {
-          moves.push({ x: targetX, y: targetY });
+          // Check if position is occupied by another unit
+          const isOccupied = aliveUnits.some(u => 
+            u.x === targetX && u.y === targetY && u !== unit
+          );
+          
+          // Don't check for boulders - let unit attempt move and discover on reveal
+          
+          if (!isOccupied) {
+            moves.push({ x: targetX, y: targetY });
+          }
         }
       }
     }

@@ -80,14 +80,22 @@ export class BoardRenderer {
    * @returns {Object|null} { x, y }
    */
   getTileFromPixel(pixelX, pixelY) {
-    const x = Math.floor((pixelX - this.endzoneWidth - this.padding) / this.tileSize);
     const y = Math.floor((pixelY - this.padding) / this.tileSize);
     
-    // Allow any x >= 0, not just valid board positions (for future columns)
-    if (x >= 0 && y >= 0 && y < this.gameState.config.totalPaths) {
-      // Only return if it's a valid position on the existing board
-      if (this.gameState.board.isValidPosition(x, y)) {
-        return { x, y };
+    // Check if within valid y range
+    if (y >= 0 && y < this.gameState.config.totalPaths) {
+      // Check if clicking in offense endzone (spawn area)
+      if (pixelX >= 0 && pixelX < this.endzoneWidth) {
+        return { x: -1, y: y }; // Spawn area
+      }
+      
+      // Check board tiles and defense endzone
+      const x = Math.floor((pixelX - this.endzoneWidth - this.padding) / this.tileSize);
+      if (x >= 0) {
+        if (this.gameState.board.isValidPosition(x, y) || 
+            this.gameState.board.isDefenseEndzone(x)) {
+          return { x, y };
+        }
       }
     }
     

@@ -26,17 +26,17 @@ export const GamePhase = {
  */
 export const DEFAULT_GAME_CONFIG = {
   // Board settings
-  totalPaths: 5, // Number of rows/paths
+  totalPaths: 4, // Number of rows/paths
   
   // Starting conditions
-  startingGold: 10,
+  startingGold: 4,
   goldPerTurn: 4,
   
   // Tile bag composition
   tileBag: {
     [TileType.BLANK]: 20,
-    [TileType.SPIKES]: 15,
-    [TileType.BOULDER]: 10
+    [TileType.SPIKES]: 5,
+    [TileType.BOULDER]: 5
   },
   
   // Unit costs

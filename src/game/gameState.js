@@ -16,6 +16,8 @@ export class GameState {
     // Game state
     this.turn = 1;
     this.phase = GamePhase.DEFENSE;
+    this.defenseTurnCount = 0; // Track consecutive defense turns (0 or 1, resets after 2)
+    this.firstCycle = true; // Defense gets 2 turns only on first cycle
     this.gold = config.startingGold;
     this.currentDraw = []; // Tiles drawn by defense this turn
     this.gameOver = false;
@@ -39,6 +41,7 @@ export class GameState {
       // Defense wins - ran out of tiles
       this.gameOver = true;
       this.winner = 'defense';
+      this.revealAllTiles();
       this.logEvent('Defense wins! No more tiles to draw.', 'defense');
       return { success: false, error: 'No more tiles available - Defense wins!' };
     }
@@ -78,15 +81,42 @@ export class GameState {
   }
 
   /**
-   * End defense phase, start offense phase
+   * End defense phase, start offense phase OR next defense turn
    */
   endDefensePhase() {
+    this.defenseTurnCount++;
+    
+    // Defense takes 2 turns ONLY at the start of the game
+    if (this.firstCycle && this.defenseTurnCount < 2) {
+      // Stay in defense phase for second turn
+      this.currentDraw = [];
+      this.logEvent(`Defense turn ${this.defenseTurnCount} complete - taking second turn`, 'defense');
+      return;
+    }
+    
+    // After 2 defense turns (or on subsequent cycles), switch to offense
     this.phase = GamePhase.OFFENSE;
+    this.defenseTurnCount = 0; // Reset counter
+    this.firstCycle = false; // First cycle complete
     this.currentDraw = [];
     
-    // Grant gold to offense
-    this.gold += this.config.goldPerTurn;
-    this.logEvent(`Offense gained ${this.config.goldPerTurn} gold (Total: ${this.gold})`, 'offense');
+    // Count units on board (not at spawn, not trapped) for bonus gold
+    const unitsOnBoard = Object.values(this.units).filter(u => 
+      u.alive && u.x > -1 && !u.trapped
+    ).length;
+    
+    // Grant gold to offense (base + per-unit bonus)
+    const baseGold = this.config.goldPerTurn;
+    const bonusGold = unitsOnBoard;
+    const totalGold = baseGold + bonusGold;
+    
+    this.gold += totalGold;
+    
+    if (bonusGold > 0) {
+      this.logEvent(`Offense gained ${baseGold} base + ${bonusGold} unit bonus = ${totalGold} gold (Total: ${this.gold})`, 'offense');
+    } else {
+      this.logEvent(`Offense gained ${baseGold} gold (Total: ${this.gold})`, 'offense');
+    }
     
     // Enable respawn for dead units
     for (const unit of Object.values(this.units)) {
@@ -163,7 +193,7 @@ export class GameState {
     // Validate movement
     const dx = targetX - unit.x;
     const dy = targetY - unit.y;
-    const validMoves = unit.getMovementOptions();
+    const validMoves = unit.getMovementOptions(this.config.totalPaths);
     const isValidMove = validMoves.some(move => move.dx === dx && move.dy === dy);
     
     if (!isValidMove) {
@@ -174,46 +204,64 @@ export class GameState {
     if (!this.board.isValidPosition(targetX, targetY) && !this.board.isDefenseEndzone(targetX)) {
       return { success: false, error: 'Invalid target position' };
     }
+    
+    // Check if target position is occupied by another unit
+    const targetOccupied = Object.values(this.units).some(u => 
+      u.alive && u !== unit && u.x === targetX && u.y === targetY
+    );
+    if (targetOccupied) {
+      return { success: false, error: 'Target position occupied by another unit' };
+    }
 
     // Check if reached defense endzone (win condition)
     if (this.board.isDefenseEndzone(targetX)) {
       this.gold -= cost;
       this.gameOver = true;
       this.winner = 'offense';
+      this.revealAllTiles();
       this.logEvent(`${unitType} reached the defense endzone! Offense wins!`, 'offense');
       return { success: true, effects: { win: true } };
     }
 
+    // Save old position for revert if needed
+    const oldX = unit.x;
+    const oldY = unit.y;
+
     // Clear old position
-    if (this.board.isValidPosition(unit.x, unit.y)) {
-      this.board.setTileHasUnit(unit.x, unit.y, false);
+    if (this.board.isValidPosition(oldX, oldY)) {
+      this.board.setTileHasUnit(oldX, oldY, false);
     }
 
-    // Move unit
+    // Pay gold and move unit
     this.gold -= cost;
     unit.moveTo(targetX, targetY);
     
-    // Get tile and check if it's already revealed
+    // Get tile and reveal it
     const tile = this.board.getTile(targetX, targetY);
     const wasRevealed = tile.revealed;
-    
-    // Reveal tile (if not already revealed)
     tile.reveal();
+    
+    // Check if it's a boulder AFTER paying and revealing
+    if (tile.type === 'boulder') {
+      // Revert the move
+      unit.moveTo(oldX, oldY);
+      if (this.board.isValidPosition(oldX, oldY)) {
+        this.board.setTileHasUnit(oldX, oldY, true);
+      }
+      this.logEvent(`${unitType} discovered a boulder at (${targetX}, ${targetY})! Movement blocked (lost ${cost} gold)`, 'event');
+      return { success: false, error: 'Movement blocked by boulder', goldLost: true };
+    }
+    
+    // Movement successful, mark tile as occupied
     this.board.setTileHasUnit(targetX, targetY, true);
     
-    // Apply effects only if tile was hidden (being revealed now)
+    // Check if tile was already revealed
+
     const effects = wasRevealed ? { killed: false, trapped: false, blocked: false } : tile.applyEffect(unit);
     this.logEvent(`${unitType} moved to (${targetX}, ${targetY})`, 'offense');
     
-    if (effects.blocked) {
-      // Move was blocked, revert position
-      unit.moveTo(unit.x - dx, unit.y - dy);
-      this.board.setTileHasUnit(targetX, targetY, false);
-      this.board.setTileHasUnit(unit.x, unit.y, true);
-      this.logEvent(`Movement blocked by boulder!`, 'event');
-      return { success: false, error: 'Movement blocked by boulder' };
-    }
-
+    // Boulder already checked before moving, so blocked should never happen here
+    
     if (effects.killed) {
       this.logEvent(`${unitType} was killed by spikes!`, 'danger');
       unit.kill();
@@ -297,6 +345,14 @@ export class GameState {
   }
 
   /**
+   * Reveal all tiles on the board (for game over)
+   */
+  revealAllTiles() {
+    const tiles = this.board.getAllTiles();
+    tiles.forEach(tile => tile.reveal());
+  }
+
+  /**
    * Reset game state
    */
   reset() {
@@ -305,6 +361,8 @@ export class GameState {
     this.units = createAllUnits();
     this.turn = 1;
     this.phase = GamePhase.DEFENSE;
+    this.defenseTurnCount = 0;
+    this.firstCycle = true; // Reset first cycle flag
     this.gold = this.config.startingGold;
     this.currentDraw = [];
     this.gameOver = false;

@@ -19,6 +19,37 @@ export class Controls {
   }
 
   /**
+   * Get the next available tile from current draw that hasn't been assigned
+   * @returns {string|null} Next available tile type or null
+   */
+  getNextAvailableTile() {
+    const currentDraw = this.gameState.currentDraw;
+    const assignments = this.defensePlayer.getAssignments();
+    
+    if (!currentDraw || currentDraw.length === 0) {
+      return null;
+    }
+    
+    // Count how many of each tile type have been assigned
+    const assignedCounts = {};
+    Array.from(assignments.values()).forEach(tile => {
+      assignedCounts[tile] = (assignedCounts[tile] || 0) + 1;
+    });
+    
+    // Find first tile type that still has unassigned tiles
+    for (const tileType of currentDraw) {
+      const totalCount = currentDraw.filter(t => t === tileType).length;
+      const assignedCount = assignedCounts[tileType] || 0;
+      
+      if (assignedCount < totalCount) {
+        return tileType;
+      }
+    }
+    
+    return null;
+  }
+
+  /**
    * Setup all event listeners
    */
   setupEventListeners() {
@@ -90,6 +121,11 @@ export class Controls {
    * Handle canvas click
    */
   handleCanvasClick(event) {
+    // Don't allow interactions if game is over
+    if (this.gameState.isGameOver()) {
+      return;
+    }
+    
     const rect = this.renderer.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
@@ -121,7 +157,11 @@ export class Controls {
           this.selectedTileType = result.replacedTile;
           console.log(`Picked up ${result.replacedTile} from row ${tile.y}`);
         } else {
-          this.selectedTileType = null;
+          // Auto-select next available tile for quick placement
+          this.selectedTileType = this.getNextAvailableTile();
+          if (this.selectedTileType) {
+            console.log(`Auto-selected next tile: ${this.selectedTileType}`);
+          }
         }
         
         this.updateDefenseUI();
@@ -192,6 +232,14 @@ export class Controls {
       );
       
       if (clickedUnit) {
+        // Check if player has enough gold to move this unit
+        const moveCost = clickedUnit.getMoveCost(this.gameState.config);
+        if (this.gameState.gold < moveCost) {
+          console.log(`Cannot select unit - need ${moveCost} gold but only have ${this.gameState.gold}`);
+          this.hud.logMessage(`Not enough gold to move ${clickedUnit.type} (need ${moveCost}, have ${this.gameState.gold})`, 'error');
+          return;
+        }
+        
         this.offensePlayer.selectUnit(clickedUnit.type);
         const validMoves = this.offensePlayer.getValidMoves();
         this.renderer.setHighlightedTiles(validMoves);
@@ -208,10 +256,18 @@ export class Controls {
         this.hud.updateAll();
         
         if (result.effects && result.effects.win) {
+          // Render again to show revealed tiles
+          this.renderer.render();
           this.hud.showGameOver('offense');
         }
       } else {
         console.error('Move failed:', result.error);
+        
+        // Update UI even on failure (gold may have been spent for boulder)
+        if (result.goldLost) {
+          this.renderer.render();
+          this.hud.updateAll();
+        }
       }
     }
   }
@@ -220,17 +276,13 @@ export class Controls {
    * Handle draw tile click (defense phase)
    */
   handleDrawTileClick(event) {
-    console.log('handleDrawTileClick called', event.target);
-    
+    if (this.gameState.isGameOver()) return;
     if (this.gameState.phase !== GamePhase.DEFENSE) return;
     
     const tileElement = event.target.closest('.draw-tile-item');
-    console.log('tileElement:', tileElement);
-    
     if (!tileElement || tileElement.classList.contains('placed')) return;
     
     const tileType = tileElement.dataset.tile;
-    console.log('Selected tile type:', tileType);
     
     // Select this tile
     this.selectedTileType = tileType;
@@ -249,6 +301,7 @@ export class Controls {
    * Handle unit action click (offense phase)
    */
   handleUnitActionClick(event) {
+    if (this.gameState.isGameOver()) return;
     if (this.gameState.phase !== GamePhase.OFFENSE) return;
     
     const button = event.target;
@@ -279,6 +332,7 @@ export class Controls {
    * Handle end defense turn
    */
   handleEndDefenseTurn() {
+    if (this.gameState.isGameOver()) return;
     if (this.gameState.phase !== GamePhase.DEFENSE) return;
     
     // Check if tiles have been placed
@@ -298,15 +352,29 @@ export class Controls {
     this.defensePlayer.endTurn();
     this.renderer.clearPreviewTiles();
     this.renderer.clearCursorTile();
-    this.hud.updateAll();
     this.hud.clearCurrentDraw();
-    this.renderer.render();
+    
+    // Check if still in defense phase (second turn) or moved to offense
+    if (this.gameState.phase === GamePhase.DEFENSE) {
+      // Start second defense turn
+      const drawResult = this.defensePlayer.startTurn();
+      if (drawResult.success) {
+        this.hud.updateAll();
+        this.hud.updateCurrentDraw(drawResult.tiles, this.defensePlayer.getAssignments());
+        this.renderer.render();
+      }
+    } else {
+      // Moved to offense phase
+      this.hud.updateAll();
+      this.renderer.render();
+    }
   }
 
   /**
    * Handle end offense turn
    */
   handleEndOffenseTurn() {
+    if (this.gameState.isGameOver()) return;
     if (this.gameState.phase !== GamePhase.OFFENSE) return;
     
     this.offensePlayer.endTurn();
@@ -319,7 +387,9 @@ export class Controls {
       this.hud.updateCurrentDraw(result.tiles);
       this.renderer.render();
     } else {
-      // Defense ran out of tiles
+      // Defense ran out of tiles - game over
+      this.hud.updateAll();
+      this.renderer.render();
       this.hud.showGameOver('defense');
     }
   }
@@ -328,6 +398,7 @@ export class Controls {
    * Handle auto place button
    */
   handleAutoPlace() {
+    if (this.gameState.isGameOver()) return;
     if (this.gameState.phase !== GamePhase.DEFENSE) return;
     
     const result = this.defensePlayer.autoPlace();

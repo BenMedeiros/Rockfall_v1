@@ -32,6 +32,21 @@ export class HUD {
     this.updateTilesRemaining();
     this.updateUnitsRoster();
     this.updateActionLog();
+    this.updateButtonStates();
+  }
+  
+  /**
+   * Update button states (enable/disable based on game state)
+   */
+  updateButtonStates() {
+    const isGameOver = this.gameState.isGameOver();
+    
+    // Disable End Turn buttons when game is over
+    document.getElementById('endDefenseTurnBtn').disabled = isGameOver;
+    document.getElementById('endOffenseTurnBtn').disabled = isGameOver;
+    document.getElementById('autoPlaceBtn').disabled = isGameOver;
+    
+    // Keep New Game and Replay buttons enabled
   }
 
   /**
@@ -61,7 +76,14 @@ export class HUD {
    */
   updateGold() {
     this.elements.goldAmount.textContent = this.gameState.gold;
-    this.elements.goldIncome.textContent = this.gameState.config.goldPerTurn;
+    
+    // Calculate next turn income (base + units on board)
+    const unitsOnBoard = Object.values(this.gameState.units).filter(u => 
+      u.alive && u.x > -1 && !u.trapped
+    ).length;
+    const nextIncome = this.gameState.config.goldPerTurn + unitsOnBoard;
+    
+    this.elements.goldIncome.textContent = nextIncome;
   }
 
   /**
