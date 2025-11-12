@@ -107,6 +107,17 @@ body {
     border-radius: 4px;
 }
 
+.current-draw {
+    margin-bottom: 1rem;
+}
+
+.placement-hint {
+    color: var(--warning);
+    font-size: 0.85rem;
+    font-style: italic;
+    margin-bottom: 0.5rem;
+}
+
 .tile-draw-container {
     display: flex;
     flex-direction: column;
@@ -123,10 +134,16 @@ body {
     border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.2s;
+    border: 2px solid transparent;
 }
 
-.draw-tile-item:hover {
+.draw-tile-item:hover:not(.placed) {
     background-color: var(--accent-secondary);
+}
+
+.draw-tile-item.selected {
+    background-color: var(--accent-secondary);
+    border-color: var(--warning);
 }
 
 .draw-tile-item.placed {

@@ -24,21 +24,33 @@ export class DefensePlayer {
    * Assign a tile to a specific row
    * @param {number} row 
    * @param {string} tileType 
-   * @returns {boolean}
+   * @returns {Object} { success: boolean, replacedTile: string|null }
    */
   assignTileToRow(row, tileType) {
     if (row < 0 || row >= this.gameState.config.totalPaths) {
-      return false;
+      return { success: false, replacedTile: null };
     }
 
     // Check if tile is in current draw
     const availableTiles = this.getAvailableTiles();
     if (!availableTiles.includes(tileType)) {
-      return false;
+      return { success: false, replacedTile: null };
     }
 
+    // Check if row already has a tile assigned
+    const replacedTile = this.selectedTiles.get(row) || null;
+    
     this.selectedTiles.set(row, tileType);
-    return true;
+    
+    // Log the tile placement with coordinates
+    const nextColumn = this.gameState.board.maxColumn + 1;
+    if (replacedTile) {
+      this.gameState.logEvent(`Replaced ${replacedTile} with ${tileType} at (${nextColumn}, ${row})`, 'defense');
+    } else {
+      this.gameState.logEvent(`Placed ${tileType} at (${nextColumn}, ${row})`, 'defense');
+    }
+    
+    return { success: true, replacedTile };
   }
 
   /**

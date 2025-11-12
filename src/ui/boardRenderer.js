@@ -22,12 +22,20 @@ export class BoardRenderer {
       tileHidden: '#2d3748',
       tileRevealed: '#4a5568',
       highlight: '#ffd166',
-      selected: '#06d6a0'
+      selected: '#06d6a0',
+      preview: '#4a5568'
     };
     
     // Mouse interaction
     this.hoveredTile = null;
     this.highlightedTiles = [];
+    
+    // Preview tiles for defense placement
+    this.previewTiles = new Map(); // row -> tileType
+    
+    // Cursor tile (tile being held)
+    this.cursorTile = null;
+    this.cursorPos = { x: 0, y: 0 };
     
     this.resizeCanvas();
   }
@@ -37,7 +45,7 @@ export class BoardRenderer {
    */
   resizeCanvas() {
     const dims = this.gameState.board.getDimensions();
-    const boardWidth = Math.max(dims.width, 5); // Minimum 5 columns visible
+    const boardWidth = Math.max(dims.width, 1); // Show at least 1 column
     
     this.canvas.width = this.endzoneWidth * 2 + boardWidth * this.tileSize + this.padding * 2;
     this.canvas.height = this.gameState.config.totalPaths * this.tileSize + this.padding * 2;
@@ -66,8 +74,12 @@ export class BoardRenderer {
     const x = Math.floor((pixelX - this.endzoneWidth - this.padding) / this.tileSize);
     const y = Math.floor((pixelY - this.padding) / this.tileSize);
     
-    if (this.gameState.board.isValidPosition(x, y)) {
-      return { x, y };
+    // Allow any x >= 0, not just valid board positions (for future columns)
+    if (x >= 0 && y >= 0 && y < this.gameState.config.totalPaths) {
+      // Only return if it's a valid position on the existing board
+      if (this.gameState.board.isValidPosition(x, y)) {
+        return { x, y };
+      }
     }
     
     return null;
@@ -105,6 +117,45 @@ export class BoardRenderer {
   }
 
   /**
+   * Set preview tiles for defense placement
+   * @param {Map} tiles - Map of row -> tileType
+   */
+  setPreviewTiles(tiles) {
+    this.previewTiles = tiles;
+  }
+
+  /**
+   * Clear preview tiles
+   */
+  clearPreviewTiles() {
+    this.previewTiles = new Map();
+  }
+
+  /**
+   * Set cursor tile (tile being held)
+   * @param {string} tileType 
+   */
+  setCursorTile(tileType) {
+    this.cursorTile = tileType;
+  }
+
+  /**
+   * Clear cursor tile
+   */
+  clearCursorTile() {
+    this.cursorTile = null;
+  }
+
+  /**
+   * Update cursor position
+   * @param {number} x 
+   * @param {number} y 
+   */
+  updateCursorPosition(x, y) {
+    this.cursorPos = { x, y };
+  }
+
+  /**
    * Render the entire board
    */
   render() {
@@ -113,8 +164,10 @@ export class BoardRenderer {
     this.drawEndzones();
     this.drawGrid();
     this.drawTiles();
+    this.drawPreviewTiles();
     this.drawUnits();
     this.drawHighlights();
+    this.drawCursorTile();
   }
 
   /**
@@ -147,7 +200,7 @@ export class BoardRenderer {
     
     // Defense endzone (right)
     const defenseX = this.endzoneWidth + this.padding + 
-                     Math.max(this.gameState.board.maxColumn + 1, 5) * this.tileSize;
+                     Math.max(this.gameState.board.maxColumn + 1, 1) * this.tileSize;
     this.ctx.fillStyle = this.colors.defenseEndzone + '40';
     this.ctx.fillRect(defenseX, this.padding, this.endzoneWidth, height);
     this.ctx.strokeStyle = this.colors.defenseEndzone;
@@ -163,7 +216,7 @@ export class BoardRenderer {
    */
   drawGrid() {
     const dims = this.gameState.board.getDimensions();
-    const width = Math.max(dims.width, 5);
+    const width = Math.max(dims.width, 1); // Show at least 1 column worth of grid
     const height = this.gameState.config.totalPaths;
     
     this.ctx.strokeStyle = this.colors.grid;
@@ -196,6 +249,54 @@ export class BoardRenderer {
     
     for (const tile of tiles) {
       this.drawTile(tile);
+    }
+  }
+
+  /**
+   * Draw preview tiles (defense placement)
+   */
+  drawPreviewTiles() {
+    const nextColumn = this.gameState.board.maxColumn + 1;
+    
+    for (const [row, tileType] of this.previewTiles.entries()) {
+      const pos = this.getTilePosition(nextColumn, row);
+      
+      // Draw semi-transparent tile
+      this.ctx.globalAlpha = 0.7;
+      
+      // Get tile color based on type
+      const colors = {
+        'blank': '#4a5568',
+        'spikes': '#ef476f',
+        'boulder': '#8b7355'
+      };
+      const color = colors[tileType] || '#4a5568';
+      
+      this.ctx.fillStyle = color;
+      this.ctx.fillRect(pos.x + 2, pos.y + 2, this.tileSize - 4, this.tileSize - 4);
+      
+      // Draw tile symbol
+      const symbols = {
+        'blank': '',
+        'spikes': '▲',
+        'boulder': '●'
+      };
+      const symbol = symbols[tileType] || '?';
+      
+      if (symbol) {
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = 'bold 24px sans-serif';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(symbol, pos.x + this.tileSize / 2, pos.y + this.tileSize / 2);
+      }
+      
+      // Draw border to show it's a preview
+      this.ctx.strokeStyle = this.colors.warning;
+      this.ctx.lineWidth = 2;
+      this.ctx.strokeRect(pos.x + 2, pos.y + 2, this.tileSize - 4, this.tileSize - 4);
+      
+      this.ctx.globalAlpha = 1.0;
     }
   }
 
@@ -293,6 +394,50 @@ export class BoardRenderer {
       this.ctx.strokeStyle = this.colors.selected;
       this.ctx.lineWidth = 3;
       this.ctx.strokeRect(pos.x + 2, pos.y + 2, this.tileSize - 4, this.tileSize - 4);
+    }
+  }
+
+  /**
+   * Draw cursor tile (tile being held)
+   */
+  drawCursorTile() {
+    if (!this.cursorTile) return;
+    
+    const size = 40;
+    const x = this.cursorPos.x - size / 2;
+    const y = this.cursorPos.y - size / 2;
+    
+    // Get tile color and symbol
+    const colors = {
+      'blank': '#4a5568',
+      'spikes': '#ef476f',
+      'boulder': '#8b7355'
+    };
+    const symbols = {
+      'blank': '',
+      'spikes': '▲',
+      'boulder': '●'
+    };
+    
+    const color = colors[this.cursorTile] || '#4a5568';
+    const symbol = symbols[this.cursorTile] || '?';
+    
+    // Draw tile
+    this.ctx.fillStyle = color;
+    this.ctx.fillRect(x, y, size, size);
+    
+    // Draw border
+    this.ctx.strokeStyle = this.colors.warning;
+    this.ctx.lineWidth = 3;
+    this.ctx.strokeRect(x, y, size, size);
+    
+    // Draw symbol
+    if (symbol) {
+      this.ctx.fillStyle = '#ffffff';
+      this.ctx.font = 'bold 20px sans-serif';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'middle';
+      this.ctx.fillText(symbol, x + size / 2, y + size / 2);
     }
   }
 

@@ -92,20 +92,30 @@ export class HUD {
       return;
     }
 
-    const html = tiles.map((tile, index) => {
-      const assigned = Array.from(assignments.values()).filter(t => t === tile).length;
-      const count = tiles.filter(t => t === tile).length;
-      const remaining = count - assigned;
+    // Count how many of each tile type are available
+    const tileTypeCounts = {};
+    tiles.forEach(tile => {
+      tileTypeCounts[tile] = (tileTypeCounts[tile] || 0) + 1;
+    });
+
+    // Count how many have been assigned
+    const assignedCounts = {};
+    Array.from(assignments.values()).forEach(tile => {
+      assignedCounts[tile] = (assignedCounts[tile] || 0) + 1;
+    });
+
+    const html = Object.entries(tileTypeCounts).map(([tileType, totalCount]) => {
+      const assignedCount = assignedCounts[tileType] || 0;
+      const remainingCount = totalCount - assignedCount;
+      const allPlaced = remainingCount === 0;
       
       return `
-        <div class="draw-tile-item ${remaining === 0 ? 'placed' : ''}" data-tile="${tile}">
-          <span>${getTileDisplayName(tile)}</span>
-          <span>${remaining > 0 ? remaining : 'Placed'}</span>
+        <div class="draw-tile-item ${allPlaced ? 'placed' : ''}" data-tile="${tileType}">
+          <span>${getTileDisplayName(tileType)}</span>
+          <span>${allPlaced ? 'Placed' : `x${remainingCount}`}</span>
         </div>
       `;
-    })
-    .filter((html, index, arr) => arr.indexOf(html) === index) // Remove duplicates
-    .join('');
+    }).join('');
     
     this.elements.currentDrawTiles.innerHTML = html;
   }
