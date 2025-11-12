@@ -84,7 +84,8 @@ class RockfallGame {
     if (result.success) {
       // Update UI
       this.hud.updateAll();
-      this.hud.updateCurrentDraw(result.tiles);
+      this.hud.updateCurrentDraw(result.tiles, this.defensePlayer.getAssignments());
+      this.renderer.setPreviewTiles(this.defensePlayer.getAssignments());
       this.renderer.render();
       
       console.log('Game started! Defense phase begins.');

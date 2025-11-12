@@ -58,6 +58,15 @@ export class BoardRenderer {
    * @returns {Object} { x, y }
    */
   getTilePosition(x, y) {
+    // Handle offense endzone (x=-1)
+    if (x === -1) {
+      return {
+        x: this.endzoneWidth / 2 - this.tileSize / 2,
+        y: this.padding + y * this.tileSize
+      };
+    }
+    
+    // Regular board tiles (x >= 0)
     return {
       x: this.endzoneWidth + this.padding + x * this.tileSize,
       y: this.padding + y * this.tileSize

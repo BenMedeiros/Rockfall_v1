@@ -136,6 +136,9 @@ export class DefensePlayer {
    * @returns {Object}
    */
   autoPlace() {
+    // Clear any existing assignments
+    this.selectedTiles.clear();
+    
     const tiles = [...this.gameState.currentDraw];
     
     // Simple random assignment
@@ -144,8 +147,14 @@ export class DefensePlayer {
       const tile = tiles[randomIndex];
       this.selectedTiles.set(row, tile);
       tiles.splice(randomIndex, 1);
+      
+      // Log the placement
+      const nextColumn = this.gameState.board.maxColumn + 1;
+      this.gameState.logEvent(`Placed ${tile} at (${nextColumn}, ${row})`, 'defense');
     }
 
-    return this.placeTiles();
+    // Don't call placeTiles() - just return success
+    // User must click "End Turn" to finalize
+    return { success: true };
   }
 }

@@ -7,7 +7,7 @@ export class Unit {
   constructor(type, id) {
     this.type = type;
     this.id = id;
-    this.x = 0; // Start at offense endzone
+    this.x = -1; // Start at offense endzone (x=-1)
     this.y = -1; // Not on board yet
     this.alive = false;
     this.spawned = false;
@@ -20,7 +20,7 @@ export class Unit {
    * @param {number} y - Row position in endzone
    */
   spawn(y = 0) {
-    this.x = 0;
+    this.x = -1; // Offense endzone is at x=-1
     this.y = y;
     this.alive = true;
     this.spawned = true;
@@ -44,7 +44,7 @@ export class Unit {
   kill() {
     this.alive = false;
     this.spawned = false;
-    this.x = 0;
+    this.x = -1; // Reset to offense endzone
     this.y = -1;
     // canRespawn will be set to true at end of offense turn
   }

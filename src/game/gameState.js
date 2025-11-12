@@ -120,7 +120,7 @@ export class GameState {
 
     // Check if spawn area is occupied
     const spawnOccupied = Object.values(this.units).some(u => 
-      u.alive && u.x === 0 && u.spawned
+      u.alive && u.x === -1 && u.spawned
     );
     if (spawnOccupied) {
       return { success: false, error: 'Spawn area occupied' };
@@ -128,7 +128,7 @@ export class GameState {
 
     // Spawn unit
     this.gold -= cost;
-    unit.spawn(0); // Spawn at y=0 in endzone
+    unit.spawn(0); // Spawn at y=0 in offense endzone (x=-1)
     this.logEvent(`Spawned ${unitType} (-${cost} gold)`, 'offense');
     
     return { success: true };
@@ -193,12 +193,16 @@ export class GameState {
     this.gold -= cost;
     unit.moveTo(targetX, targetY);
     
-    // Reveal and apply tile effect
+    // Get tile and check if it's already revealed
     const tile = this.board.getTile(targetX, targetY);
+    const wasRevealed = tile.revealed;
+    
+    // Reveal tile (if not already revealed)
     tile.reveal();
     this.board.setTileHasUnit(targetX, targetY, true);
     
-    const effects = tile.applyEffect(unit);
+    // Apply effects only if tile was hidden (being revealed now)
+    const effects = wasRevealed ? { killed: false, trapped: false, blocked: false } : tile.applyEffect(unit);
     this.logEvent(`${unitType} moved to (${targetX}, ${targetY})`, 'offense');
     
     if (effects.blocked) {

@@ -63,7 +63,7 @@ export class Board {
    * @returns {boolean}
    */
   isOffenseEndzone(x) {
-    return x === 0;
+    return x === -1;
   }
 
   /**

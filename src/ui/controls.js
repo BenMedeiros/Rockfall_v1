@@ -220,12 +220,17 @@ export class Controls {
    * Handle draw tile click (defense phase)
    */
   handleDrawTileClick(event) {
+    console.log('handleDrawTileClick called', event.target);
+    
     if (this.gameState.phase !== GamePhase.DEFENSE) return;
     
     const tileElement = event.target.closest('.draw-tile-item');
+    console.log('tileElement:', tileElement);
+    
     if (!tileElement || tileElement.classList.contains('placed')) return;
     
     const tileType = tileElement.dataset.tile;
+    console.log('Selected tile type:', tileType);
     
     // Select this tile
     this.selectedTileType = tileType;
@@ -328,10 +333,8 @@ export class Controls {
     const result = this.defensePlayer.autoPlace();
     if (result.success) {
       this.selectedTileType = null;
-      this.renderer.clearPreviewTiles();
-      this.renderer.render();
-      this.hud.updateAll();
-      console.log('Tiles placed randomly');
+      this.updateDefenseUI();
+      console.log('Tiles placed randomly - click End Turn to finalize');
     } else {
       console.error('Auto-placement failed:', result.error);
     }
