@@ -1,0 +1,366 @@
+/* Rockfall - Main Styles */
+
+:root {
+    --bg-dark: #1a1a2e;
+    --bg-medium: #16213e;
+    --bg-light: #0f3460;
+    --accent-primary: #e94560;
+    --accent-secondary: #533483;
+    --text-light: #eaeaea;
+    --text-dark: #16213e;
+    --border-color: #533483;
+    --success: #06d6a0;
+    --warning: #ffd166;
+    --danger: #ef476f;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg-dark);
+    color: var(--text-light);
+    overflow: hidden;
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* Header */
+.game-header {
+    background-color: var(--bg-medium);
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.game-header h1 {
+    color: var(--accent-primary);
+    font-size: 2rem;
+    letter-spacing: 2px;
+}
+
+.game-info {
+    display: flex;
+    gap: 2rem;
+    font-size: 1.1rem;
+}
+
+#phaseIndicator {
+    color: var(--warning);
+    font-weight: bold;
+}
+
+/* Main Container */
+.game-container {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 280px 1fr 280px;
+    gap: 1rem;
+    padding: 1rem;
+    overflow: hidden;
+}
+
+/* Side Panels */
+.left-panel, .right-panel {
+    background-color: var(--bg-medium);
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-y: auto;
+}
+
+.player-panel h2 {
+    color: var(--accent-primary);
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
+}
+
+.player-panel h3 {
+    color: var(--text-light);
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Defense Panel */
+.tiles-remaining ul {
+    list-style: none;
+    margin-bottom: 1rem;
+}
+
+.tiles-remaining li {
+    padding: 0.5rem;
+    margin: 0.25rem 0;
+    background-color: var(--bg-light);
+    border-radius: 4px;
+}
+
+.tile-draw-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.draw-tile-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background-color: var(--bg-light);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.draw-tile-item:hover {
+    background-color: var(--accent-secondary);
+}
+
+.draw-tile-item.placed {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Offense Panel */
+.gold-display {
+    background-color: var(--bg-light);
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+}
+
+.gold-display h3 {
+    font-size: 1.3rem;
+    color: var(--warning);
+}
+
+.gold-income {
+    color: var(--success);
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+.units-roster {
+    margin-bottom: 1rem;
+}
+
+#unitsRosterList {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.unit-card {
+    background-color: var(--bg-light);
+    padding: 0.75rem;
+    border-radius: 4px;
+    border: 2px solid transparent;
+}
+
+.unit-card.available {
+    border-color: var(--success);
+}
+
+.unit-card.dead {
+    opacity: 0.5;
+    border-color: var(--danger);
+}
+
+.unit-card-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.unit-name {
+    font-weight: bold;
+    color: var(--text-light);
+}
+
+.unit-status {
+    font-size: 0.85rem;
+}
+
+.unit-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.btn-spawn, .btn-move {
+    padding: 0.25rem 0.5rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: background-color 0.2s;
+}
+
+.btn-spawn {
+    background-color: var(--success);
+    color: var(--text-dark);
+}
+
+.btn-spawn:hover:not(:disabled) {
+    background-color: #05c794;
+}
+
+.btn-move {
+    background-color: var(--accent-primary);
+    color: var(--text-light);
+}
+
+.btn-move:hover:not(:disabled) {
+    background-color: #d63b54;
+}
+
+.btn-spawn:disabled, .btn-move:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Board Container */
+.board-container {
+    background-color: var(--bg-medium);
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+}
+
+#gameBoard {
+    border: 2px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-dark);
+}
+
+/* Action Log */
+.action-log h3 {
+    color: var(--accent-primary);
+    margin-bottom: 1rem;
+}
+
+.log-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.log-entry {
+    padding: 0.5rem;
+    background-color: var(--bg-light);
+    border-radius: 4px;
+    border-left: 3px solid var(--border-color);
+}
+
+.log-entry.defense {
+    border-left-color: var(--accent-secondary);
+}
+
+.log-entry.offense {
+    border-left-color: var(--success);
+}
+
+.log-entry.event {
+    border-left-color: var(--warning);
+}
+
+.log-entry.danger {
+    border-left-color: var(--danger);
+}
+
+/* Footer */
+.game-footer {
+    background-color: var(--bg-medium);
+    padding: 1rem 2rem;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    border-top: 2px solid var(--border-color);
+}
+
+/* Buttons */
+.btn-primary, .btn-secondary {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background-color: var(--accent-primary);
+    color: var(--text-light);
+}
+
+.btn-primary:hover:not(:disabled) {
+    background-color: #d63b54;
+    transform: translateY(-2px);
+}
+
+.btn-secondary {
+    background-color: var(--bg-light);
+    color: var(--text-light);
+    border: 2px solid var(--border-color);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background-color: var(--accent-secondary);
+    border-color: var(--accent-primary);
+}
+
+.btn-primary:disabled, .btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Seed Input */
+.seed-input {
+    padding: 0.5rem;
+    border: 2px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--bg-light);
+    color: var(--text-light);
+    font-size: 0.9rem;
+    width: 200px;
+}
+
+.seed-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-dark);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--accent-secondary);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-primary);
+}

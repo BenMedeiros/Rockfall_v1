@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rockfall - Asymmetric Strategy Game</title>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="game-header">
+            <h1>ROCKFALL</h1>
+            <div class="game-info">
+                <span id="turnCounter">Turn: 1</span>
+                <span id="phaseIndicator">Defense Phase</span>
+            </div>
+        </header>
+
+        <!-- Main Game Area -->
+        <main class="game-container">
+            <!-- Left Panel (Player Info) -->
+            <aside class="left-panel">
+                <!-- Defense Panel -->
+                <div id="defensePanel" class="player-panel">
+                    <h2>Defense</h2>
+                    <div class="tiles-remaining">
+                        <h3>Tiles Remaining:</h3>
+                        <ul id="tilesRemainingList"></ul>
+                    </div>
+                    <div class="current-draw">
+                        <h3>Current Draw:</h3>
+                        <div id="currentDrawTiles" class="tile-draw-container"></div>
+                    </div>
+                    <button id="endDefenseTurnBtn" class="btn-primary">End Turn</button>
+                </div>
+
+                <!-- Offense Panel -->
+                <div id="offensePanel" class="player-panel hidden">
+                    <h2>Offense</h2>
+                    <div class="gold-display">
+                        <h3>Gold: <span id="goldAmount">10</span></h3>
+                        <p class="gold-income">Income: +<span id="goldIncome">4</span>/turn</p>
+                    </div>
+                    <div class="units-roster">
+                        <h3>Units:</h3>
+                        <div id="unitsRosterList"></div>
+                    </div>
+                    <button id="endOffenseTurnBtn" class="btn-primary">End Turn</button>
+                </div>
+            </aside>
+
+            <!-- Game Board (Canvas) -->
+            <section class="board-container">
+                <canvas id="gameBoard"></canvas>
+            </section>
+
+            <!-- Right Panel (Action Log) -->
+            <aside class="right-panel">
+                <div class="action-log">
+                    <h3>Action Log</h3>
+                    <div id="actionLogContent" class="log-content"></div>
+                </div>
+            </aside>
+        </main>
+
+        <!-- Footer Controls -->
+        <footer class="game-footer">
+            <button id="newGameBtn" class="btn-secondary">New Game</button>
+            <button id="replaySeedBtn" class="btn-secondary">Replay with Seed</button>
+            <input type="text" id="seedInput" placeholder="Enter seed..." class="seed-input hidden">
+        </footer>
+    </div>
+
+    <!-- Load JavaScript modules -->
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>
