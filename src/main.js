@@ -8,6 +8,7 @@ import { OffensePlayer } from './player/offense.js';
 import { BoardRenderer } from './ui/boardRenderer.js';
 import { HUD } from './ui/hud.js';
 import { Controls } from './ui/controls.js';
+import { getImageLoader } from './utils/imageLoader.js';
 
 class RockfallGame {
   constructor() {
@@ -108,8 +109,21 @@ class RockfallGame {
 }
 
 // Initialize game when DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('DOM loaded, creating game...');
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log('DOM loaded, loading images...');
+  
+  // Load images first
+  const imageLoader = getImageLoader();
+  try {
+    await imageLoader.loadImages();
+    console.log('Images loaded successfully');
+  } catch (error) {
+    console.error('Failed to load images:', error);
+    alert('Failed to load game images. Please refresh the page.');
+    return;
+  }
+  
+  console.log('Creating game...');
   
   const game = new RockfallGame();
   
@@ -120,8 +134,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // goldPerTurn: 4,
     // tileBag: {
     //   blank: 20,
-    //   spikes: 15,
-    //   boulder: 10
+    //   spike_trap: 15,
+    //   wall: 10
     // }
   };
   

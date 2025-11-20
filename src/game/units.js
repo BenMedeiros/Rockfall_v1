@@ -83,6 +83,12 @@ export class Unit {
           options.push({ dx: 1, dy: dy });  // Column 0
           options.push({ dx: 2, dy: dy });  // Column 1
         }
+      } else if (this.type === UnitType.JUMPER) {
+        // Jumper can jump to column 1 (any row)
+        for (let targetY = 0; targetY < totalPaths; targetY++) {
+          const dy = targetY - this.y;
+          options.push({ dx: 2, dy: dy });  // Column 1 (jump over column 0)
+        }
       } else {
         // Basic unit can only move to column 0 (any row)
         for (let targetY = 0; targetY < totalPaths; targetY++) {
@@ -95,7 +101,9 @@ export class Unit {
     
     switch (this.type) {
       case UnitType.BASIC:
-        // Adjacent tiles only (not diagonal)
+      case UnitType.SCOUT:
+      case UnitType.BOMBER:
+        // Move 1: Adjacent tiles only (not diagonal)
         options.push(
           { dx: 1, dy: 0 },  // Right
           { dx: 0, dy: 1 },  // Down
@@ -108,20 +116,44 @@ export class Unit {
         break;
         
       case UnitType.SPRINTER:
-        // Sprinter moves exactly 2 tiles: dx=±2, dy=±2, or dx=±1 AND dy=±1
+        // Move 2: Move 1, then if no trap/obstruction, move 1 again
+        // For simplicity, we'll allow 2-tile moves in cardinal directions
         options.push(
           // 2 tiles horizontally
           { dx: 2, dy: 0 },   // Right 2
-          { dx: -2, dy: 0 },  // Left 2
           // 2 tiles vertically
           { dx: 0, dy: 2 },   // Down 2
           { dx: 0, dy: -2 },  // Up 2
-          // Diagonal (1+1)
-          { dx: 1, dy: 1 },   // Right-Down
-          { dx: 1, dy: -1 },  // Right-Up
-          { dx: -1, dy: 1 },  // Left-Down
-          { dx: -1, dy: -1 }  // Left-Up
+          // Also allow single moves
+          { dx: 1, dy: 0 },   // Right 1
+          { dx: 0, dy: 1 },   // Down 1
+          { dx: 0, dy: -1 }   // Up 1
         );
+        if (this.x > 0) {
+          options.push({ dx: -1, dy: 0 }); // Left 1
+        }
+        if (this.x > 1) {
+          options.push({ dx: -2, dy: 0 }); // Left 2
+        }
+        break;
+        
+      case UnitType.JUMPER:
+        // Jump 1: Jump over one adjacent tile, landing two spaces away
+        // Can jump orthogonally or diagonally
+        options.push(
+          // Orthogonal jumps (2 spaces away)
+          { dx: 2, dy: 0 },   // Right
+          { dx: 0, dy: 2 },   // Down
+          { dx: 0, dy: -2 },  // Up
+          // Diagonal jumps (2 spaces diagonally)
+          { dx: 2, dy: 2 },   // Right-Down
+          { dx: 2, dy: -2 },  // Right-Up
+          { dx: -2, dy: 2 },  // Left-Down
+          { dx: -2, dy: -2 }  // Left-Up
+        );
+        if (this.x > 1) {
+          options.push({ dx: -2, dy: 0 }); // Left
+        }
         break;
     }
     
@@ -153,7 +185,10 @@ export class Unit {
   getColor() {
     const colors = {
       [UnitType.BASIC]: '#06d6a0',
-      [UnitType.SPRINTER]: '#ffd166'
+      [UnitType.SPRINTER]: '#ffd166',
+      [UnitType.JUMPER]: '#118ab2',
+      [UnitType.SCOUT]: '#8338ec',
+      [UnitType.BOMBER]: '#ef476f'
     };
     return colors[this.type] || '#eaeaea';
   }
@@ -165,9 +200,50 @@ export class Unit {
   getSymbol() {
     const symbols = {
       [UnitType.BASIC]: 'B',
-      [UnitType.SPRINTER]: 'S'
+      [UnitType.SPRINTER]: 'S',
+      [UnitType.JUMPER]: 'J',
+      [UnitType.SCOUT]: 'Sc',
+      [UnitType.BOMBER]: 'Bo'
     };
     return symbols[this.type] || '?';
+  }
+
+  /**
+   * Check if this unit has Jump ability
+   * @returns {boolean}
+   */
+  hasJumpAbility() {
+    return this.type === UnitType.JUMPER;
+  }
+
+  /**
+   * Check if this unit has Reveal ability (Scout)
+   * @returns {boolean}
+   */
+  hasRevealAbility() {
+    return this.type === UnitType.SCOUT;
+  }
+
+  /**
+   * Check if this unit has Bomb ability (Bomber)
+   * @returns {boolean}
+   */
+  hasBombAbility() {
+    return this.type === UnitType.BOMBER;
+  }
+
+  /**
+   * Check if movement is a jump (distance of 2)
+   * @param {number} dx
+   * @param {number} dy
+   * @returns {boolean}
+   */
+  isJumpMove(dx, dy) {
+    if (!this.hasJumpAbility()) return false;
+    // Jump moves are 2 spaces away (orthogonal or diagonal)
+    return (Math.abs(dx) === 2 && dy === 0) || 
+           (dx === 0 && Math.abs(dy) === 2) ||
+           (Math.abs(dx) === 2 && Math.abs(dy) === 2);
   }
 
   /**
@@ -203,6 +279,9 @@ export function createUnit(type, id) {
 export function createAllUnits() {
   return {
     [UnitType.BASIC]: createUnit(UnitType.BASIC, 'basic-1'),
-    [UnitType.SPRINTER]: createUnit(UnitType.SPRINTER, 'sprinter-1')
+    [UnitType.SPRINTER]: createUnit(UnitType.SPRINTER, 'sprinter-1'),
+    [UnitType.JUMPER]: createUnit(UnitType.JUMPER, 'jumper-1'),
+    [UnitType.SCOUT]: createUnit(UnitType.SCOUT, 'scout-1'),
+    [UnitType.BOMBER]: createUnit(UnitType.BOMBER, 'bomber-1')
   };
 }

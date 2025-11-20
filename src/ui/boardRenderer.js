@@ -1,12 +1,17 @@
 /**
  * Board renderer - Canvas-based rendering for the game board
  */
+import { getImageLoader } from '../utils/imageLoader.js';
 
 export class BoardRenderer {
   constructor(canvas, gameState) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.gameState = gameState;
+    this.imageLoader = getImageLoader();
+    
+    // Cache for tile cover assignments (so each tile consistently shows cover1 or cover2)
+    this.tileCoverCache = new Map();
     
     // Rendering settings
     this.tileSize = 60;
@@ -281,40 +286,99 @@ export class BoardRenderer {
       // Draw semi-transparent tile
       this.ctx.globalAlpha = 0.7;
       
-      // Get tile color based on type
-      const colors = {
-        'blank': '#4a5568',
-        'spikes': '#ef476f',
-        'boulder': '#8b7355'
-      };
-      const color = colors[tileType] || '#4a5568';
-      
-      this.ctx.fillStyle = color;
-      this.ctx.fillRect(pos.x + 2, pos.y + 2, this.tileSize - 4, this.tileSize - 4);
-      
-      // Draw tile symbol
-      const symbols = {
-        'blank': '',
-        'spikes': '▲',
-        'boulder': '●'
-      };
-      const symbol = symbols[tileType] || '?';
-      
-      if (symbol) {
-        this.ctx.fillStyle = '#ffffff';
-        this.ctx.font = 'bold 24px sans-serif';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(symbol, pos.x + this.tileSize / 2, pos.y + this.tileSize / 2);
+      if (this.imageLoader.isLoaded()) {
+        // Get tile image based on type
+        const imageMap = {
+          'blank': 'empty.png',
+          'spike_trap': 'trap_spikes.png',
+          'cage_trap': 'trap_cage.png',
+          'oil_slick_trap': 'trap_oilslick.png',
+          'pushback_trap': 'trap_pushback.png',
+          'bomb_trap': 'trap_bomb.png',
+          'wall': 'wall.png',
+          'treasure': 'treasure.png'
+        };
+        const imageName = imageMap[tileType] || 'empty.png';
+        const image = this.imageLoader.getImage(imageName);
+        
+        if (image) {
+          this.ctx.drawImage(image, pos.x + 2, pos.y + 2, this.tileSize - 4, this.tileSize - 4);
+        } else {
+          // Fallback to color
+          const colors = {
+            'blank': '#4a5568',
+            'spike_trap': '#ef476f',
+            'cage_trap': '#8b4513',
+            'oil_slick_trap': '#2c1810',
+            'pushback_trap': '#f97316',
+            'bomb_trap': '#dc2626',
+            'wall': '#6b7280',
+            'treasure': '#fbbf24'
+          };
+          const color = colors[tileType] || '#4a5568';
+          this.ctx.fillStyle = color;
+          this.ctx.fillRect(pos.x + 2, pos.y + 2, this.tileSize - 4, this.tileSize - 4);
+        }
+      } else {
+        // Fallback rendering if images not loaded
+        const colors = {
+          'blank': '#4a5568',
+          'spike_trap': '#ef476f',
+          'cage_trap': '#8b4513',
+          'oil_slick_trap': '#2c1810',
+          'pushback_trap': '#f97316',
+          'bomb_trap': '#dc2626',
+          'wall': '#6b7280',
+          'treasure': '#fbbf24'
+        };
+        const color = colors[tileType] || '#4a5568';
+        this.ctx.fillStyle = color;
+        this.ctx.fillRect(pos.x + 2, pos.y + 2, this.tileSize - 4, this.tileSize - 4);
+        
+        // Draw tile symbol
+        const symbols = {
+          'blank': '',
+          'spike_trap': '▲',
+          'cage_trap': '⚿',
+          'oil_slick_trap': '~',
+          'pushback_trap': '◄',
+          'bomb_trap': '💣',
+          'wall': '█',
+          'treasure': '💰'
+        };
+        const symbol = symbols[tileType] || '?';
+        
+        if (symbol) {
+          this.ctx.fillStyle = '#ffffff';
+          this.ctx.font = 'bold 24px sans-serif';
+          this.ctx.textAlign = 'center';
+          this.ctx.textBaseline = 'middle';
+          this.ctx.fillText(symbol, pos.x + this.tileSize / 2, pos.y + this.tileSize / 2);
+        }
       }
       
       // Draw border to show it's a preview
-      this.ctx.strokeStyle = this.colors.warning;
+      this.ctx.strokeStyle = this.colors.preview;
       this.ctx.lineWidth = 2;
       this.ctx.strokeRect(pos.x + 2, pos.y + 2, this.tileSize - 4, this.tileSize - 4);
       
       this.ctx.globalAlpha = 1.0;
     }
+  }
+
+  /**
+   * Get cover image for a tile (consistent per tile)
+   * @param {Tile} tile 
+   * @returns {string} Cover image filename
+   */
+  getTileCover(tile) {
+    const key = `${tile.x},${tile.y}`;
+    if (!this.tileCoverCache.has(key)) {
+      // Randomly assign cover1 or cover2
+      const cover = Math.random() < 0.5 ? 'dungeonrush_cover1.png' : 'dungeonrush_cover2.png';
+      this.tileCoverCache.set(key, cover);
+    }
+    return this.tileCoverCache.get(key);
   }
 
   /**
@@ -324,32 +388,59 @@ export class BoardRenderer {
   drawTile(tile) {
     const pos = this.getTilePosition(tile.x, tile.y);
     
-    // Draw tile background
-    if (tile.revealed) {
-      this.ctx.fillStyle = tile.getColor();
-    } else {
-      this.ctx.fillStyle = this.colors.tileHidden;
-    }
-    
-    this.ctx.fillRect(pos.x + 2, pos.y + 2, this.tileSize - 4, this.tileSize - 4);
-    
-    // Draw tile symbol if revealed
-    if (tile.revealed) {
-      const symbol = tile.getSymbol();
-      if (symbol) {
-        this.ctx.fillStyle = '#ffffff';
-        this.ctx.font = 'bold 24px sans-serif';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(symbol, pos.x + this.tileSize / 2, pos.y + this.tileSize / 2);
+    if (this.imageLoader.isLoaded()) {
+      // Draw tile using images
+      if (tile.revealed) {
+        // Draw revealed tile image
+        const imageName = tile.getImageName();
+        const image = this.imageLoader.getImage(imageName);
+        if (image) {
+          this.ctx.drawImage(image, pos.x + 2, pos.y + 2, this.tileSize - 4, this.tileSize - 4);
+        } else {
+          // Fallback to color if image not found
+          this.ctx.fillStyle = tile.getColor();
+          this.ctx.fillRect(pos.x + 2, pos.y + 2, this.tileSize - 4, this.tileSize - 4);
+        }
+      } else {
+        // Draw face-down tile with cover image
+        const coverName = this.getTileCover(tile);
+        const coverImage = this.imageLoader.getImage(coverName);
+        if (coverImage) {
+          this.ctx.drawImage(coverImage, pos.x + 2, pos.y + 2, this.tileSize - 4, this.tileSize - 4);
+        } else {
+          // Fallback to gray if cover not found
+          this.ctx.fillStyle = this.colors.tileHidden;
+          this.ctx.fillRect(pos.x + 2, pos.y + 2, this.tileSize - 4, this.tileSize - 4);
+        }
       }
     } else {
-      // Draw question mark for hidden tiles
-      this.ctx.fillStyle = '#666';
-      this.ctx.font = '20px sans-serif';
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      this.ctx.fillText('?', pos.x + this.tileSize / 2, pos.y + this.tileSize / 2);
+      // Fallback rendering if images not loaded
+      if (tile.revealed) {
+        this.ctx.fillStyle = tile.getColor();
+      } else {
+        this.ctx.fillStyle = this.colors.tileHidden;
+      }
+      
+      this.ctx.fillRect(pos.x + 2, pos.y + 2, this.tileSize - 4, this.tileSize - 4);
+      
+      // Draw tile symbol if revealed
+      if (tile.revealed) {
+        const symbol = tile.getSymbol();
+        if (symbol) {
+          this.ctx.fillStyle = '#ffffff';
+          this.ctx.font = 'bold 24px sans-serif';
+          this.ctx.textAlign = 'center';
+          this.ctx.textBaseline = 'middle';
+          this.ctx.fillText(symbol, pos.x + this.tileSize / 2, pos.y + this.tileSize / 2);
+        }
+      } else {
+        // Draw question mark for hidden tiles
+        this.ctx.fillStyle = '#666';
+        this.ctx.font = '20px sans-serif';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('?', pos.x + this.tileSize / 2, pos.y + this.tileSize / 2);
+      }
     }
   }
 
@@ -424,38 +515,83 @@ export class BoardRenderer {
     const x = this.cursorPos.x - size / 2;
     const y = this.cursorPos.y - size / 2;
     
-    // Get tile color and symbol
-    const colors = {
-      'blank': '#4a5568',
-      'spikes': '#ef476f',
-      'boulder': '#8b7355'
-    };
-    const symbols = {
-      'blank': '',
-      'spikes': '▲',
-      'boulder': '●'
-    };
-    
-    const color = colors[this.cursorTile] || '#4a5568';
-    const symbol = symbols[this.cursorTile] || '?';
-    
-    // Draw tile
-    this.ctx.fillStyle = color;
-    this.ctx.fillRect(x, y, size, size);
+    if (this.imageLoader.isLoaded()) {
+      // Get tile image based on type
+      const imageMap = {
+        'blank': 'empty.png',
+        'spike_trap': 'trap_spikes.png',
+        'cage_trap': 'trap_cage.png',
+        'oil_slick_trap': 'trap_oilslick.png',
+        'pushback_trap': 'trap_pushback.png',
+        'bomb_trap': 'trap_bomb.png',
+        'wall': 'wall.png',
+        'treasure': 'treasure.png'
+      };
+      const imageName = imageMap[this.cursorTile] || 'empty.png';
+      const image = this.imageLoader.getImage(imageName);
+      
+      if (image) {
+        this.ctx.drawImage(image, x, y, size, size);
+      } else {
+        // Fallback to color
+        const colors = {
+          'blank': '#4a5568',
+          'spike_trap': '#ef476f',
+          'cage_trap': '#8b4513',
+          'oil_slick_trap': '#2c1810',
+          'pushback_trap': '#f97316',
+          'bomb_trap': '#dc2626',
+          'wall': '#6b7280',
+          'treasure': '#fbbf24'
+        };
+        const color = colors[this.cursorTile] || '#4a5568';
+        this.ctx.fillStyle = color;
+        this.ctx.fillRect(x, y, size, size);
+      }
+    } else {
+      // Fallback rendering if images not loaded
+      const colors = {
+        'blank': '#4a5568',
+        'spike_trap': '#ef476f',
+        'cage_trap': '#8b4513',
+        'oil_slick_trap': '#2c1810',
+        'pushback_trap': '#f97316',
+        'bomb_trap': '#dc2626',
+        'wall': '#6b7280',
+        'treasure': '#fbbf24'
+      };
+      const symbols = {
+        'blank': '',
+        'spike_trap': '▲',
+        'cage_trap': '⚿',
+        'oil_slick_trap': '~',
+        'pushback_trap': '◄',
+        'bomb_trap': '💣',
+        'wall': '█',
+        'treasure': '💰'
+      };
+      
+      const color = colors[this.cursorTile] || '#4a5568';
+      const symbol = symbols[this.cursorTile] || '?';
+      
+      // Draw tile
+      this.ctx.fillStyle = color;
+      this.ctx.fillRect(x, y, size, size);
+      
+      // Draw symbol
+      if (symbol) {
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = 'bold 20px sans-serif';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(symbol, x + size / 2, y + size / 2);
+      }
+    }
     
     // Draw border
-    this.ctx.strokeStyle = this.colors.warning;
+    this.ctx.strokeStyle = this.colors.preview;
     this.ctx.lineWidth = 3;
     this.ctx.strokeRect(x, y, size, size);
-    
-    // Draw symbol
-    if (symbol) {
-      this.ctx.fillStyle = '#ffffff';
-      this.ctx.font = 'bold 20px sans-serif';
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'middle';
-      this.ctx.fillText(symbol, x + size / 2, y + size / 2);
-    }
   }
 
   /**

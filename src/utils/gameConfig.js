@@ -5,14 +5,22 @@
 // Tile types enum
 export const TileType = {
   BLANK: 'blank',
-  SPIKES: 'spikes',
-  BOULDER: 'boulder'
+  SPIKE_TRAP: 'spike_trap',
+  CAGE_TRAP: 'cage_trap',
+  OIL_SLICK_TRAP: 'oil_slick_trap',
+  PUSHBACK_TRAP: 'pushback_trap',
+  BOMB_TRAP: 'bomb_trap',
+  WALL: 'wall',
+  TREASURE: 'treasure'
 };
 
 // Unit types enum
 export const UnitType = {
   BASIC: 'basic',
-  SPRINTER: 'sprinter'
+  SPRINTER: 'sprinter',
+  JUMPER: 'jumper',
+  SCOUT: 'scout',
+  BOMBER: 'bomber'
 };
 
 // Player phases
@@ -32,11 +40,16 @@ export const DEFAULT_GAME_CONFIG = {
   startingGold: 4,
   goldPerTurn: 4,
   
-  // Tile bag composition
+  // Tile bag composition (36 total tiles)
   tileBag: {
-    [TileType.BLANK]: 20,
-    [TileType.SPIKES]: 5,
-    [TileType.BOULDER]: 5
+    [TileType.BLANK]: 12,
+    [TileType.SPIKE_TRAP]: 6,
+    [TileType.CAGE_TRAP]: 4,
+    [TileType.OIL_SLICK_TRAP]: 3,
+    [TileType.PUSHBACK_TRAP]: 3,
+    [TileType.BOMB_TRAP]: 2,
+    [TileType.WALL]: 4,
+    [TileType.TREASURE]: 2
   },
   
   // Unit costs
@@ -47,6 +60,18 @@ export const DEFAULT_GAME_CONFIG = {
     },
     [UnitType.SPRINTER]: {
       summon: 3,
+      move: 1
+    },
+    [UnitType.JUMPER]: {
+      summon: 3,
+      move: 1
+    },
+    [UnitType.SCOUT]: {
+      summon: 4,
+      move: 2
+    },
+    [UnitType.BOMBER]: {
+      summon: 4,
       move: 1
     }
   }
@@ -116,8 +141,13 @@ export function validateGameConfig(config) {
 export function getTileDisplayName(tileType) {
   const names = {
     [TileType.BLANK]: 'Blank',
-    [TileType.SPIKES]: 'Spikes',
-    [TileType.BOULDER]: 'Boulder'
+    [TileType.SPIKE_TRAP]: 'Spike Trap',
+    [TileType.CAGE_TRAP]: 'Cage Trap',
+    [TileType.OIL_SLICK_TRAP]: 'Oil Slick Trap',
+    [TileType.PUSHBACK_TRAP]: 'Pushback Trap',
+    [TileType.BOMB_TRAP]: 'Bomb Trap',
+    [TileType.WALL]: 'Wall',
+    [TileType.TREASURE]: 'Treasure'
   };
   return names[tileType] || 'Unknown';
 }
@@ -130,7 +160,10 @@ export function getTileDisplayName(tileType) {
 export function getUnitDisplayName(unitType) {
   const names = {
     [UnitType.BASIC]: 'Basic',
-    [UnitType.SPRINTER]: 'Sprinter'
+    [UnitType.SPRINTER]: 'Sprinter',
+    [UnitType.JUMPER]: 'Jumper',
+    [UnitType.SCOUT]: 'Scout',
+    [UnitType.BOMBER]: 'Bomber'
   };
   return names[unitType] || 'Unknown';
 }

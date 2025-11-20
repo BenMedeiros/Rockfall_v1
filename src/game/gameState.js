@@ -4,7 +4,7 @@
 import { Board } from './board.js';
 import { TileBag } from './tileBag.js';
 import { createAllUnits } from './units.js';
-import { GamePhase } from '../utils/gameConfig.js';
+import { GamePhase, TileType } from '../utils/gameConfig.js';
 
 export class GameState {
   constructor(config) {
@@ -236,44 +236,216 @@ export class GameState {
     this.gold -= cost;
     unit.moveTo(targetX, targetY);
     
-    // Get tile and reveal it
+    // Get tile
     const tile = this.board.getTile(targetX, targetY);
     const wasRevealed = tile.revealed;
-    tile.reveal();
     
-    // Check if it's a boulder AFTER paying and revealing
-    if (tile.type === 'boulder') {
+    // Jumper doesn't reveal the tile they land on (unless already revealed)
+    const shouldReveal = !unit.isJumpMove(dx, dy);
+    if (shouldReveal) {
+      tile.reveal();
+    }
+    
+    // Check if it's a wall AFTER paying and potentially revealing
+    if (tile.type === TileType.WALL) {
       // Revert the move
       unit.moveTo(oldX, oldY);
       if (this.board.isValidPosition(oldX, oldY)) {
         this.board.setTileHasUnit(oldX, oldY, true);
       }
-      this.logEvent(`${unitType} discovered a boulder at (${targetX}, ${targetY})! Movement blocked (lost ${cost} gold)`, 'event');
-      return { success: false, error: 'Movement blocked by boulder', goldLost: true };
+      this.logEvent(`${unitType} discovered a wall at (${targetX}, ${targetY})! Movement blocked (lost ${cost} gold)`, 'event');
+      return { success: false, error: 'Movement blocked by wall', goldLost: true };
     }
     
     // Movement successful, mark tile as occupied
     this.board.setTileHasUnit(targetX, targetY, true);
     
-    // Check if tile was already revealed
-
-    const effects = wasRevealed ? { killed: false, trapped: false, blocked: false } : tile.applyEffect(unit);
+    // Apply tile effects if not already revealed
+    const direction = { dx, dy };
+    const effects = wasRevealed ? { killed: false, trapped: false, blocked: false, pushed: null, treasure: false, bomb: false } : tile.applyEffect(unit, direction);
     this.logEvent(`${unitType} moved to (${targetX}, ${targetY})`, 'offense');
     
-    // Boulder already checked before moving, so blocked should never happen here
-    
+    // Handle tile effects
     if (effects.killed) {
-      this.logEvent(`${unitType} was killed by spikes!`, 'danger');
+      this.logEvent(`${unitType} was killed by ${tile.type}!`, 'danger');
+      
+      // Check if Bomber - trigger Bomb 1 on death
+      if (unit.hasBombAbility()) {
+        this.triggerBombEffect(unit.x, unit.y, unitType);
+      }
+      
       unit.kill();
       this.board.setTileHasUnit(targetX, targetY, false);
     }
 
     if (effects.trapped) {
-      unit.setTrapped(true);
-      this.logEvent(`${unitType} is trapped!`, 'event');
+      // Check if there's already a trapped unit on this cage
+      const otherTrappedUnit = Object.values(this.units).find(u => 
+        u !== unit && u.alive && u.trapped && u.x === targetX && u.y === targetY
+      );
+      
+      if (otherTrappedUnit) {
+        // New unit becomes trapped, free the old one
+        unit.setTrapped(true);
+        otherTrappedUnit.setTrapped(false);
+        this.logEvent(`${unitType} enters the cage, freeing ${otherTrappedUnit.type}!`, 'event');
+        // The freed unit should be moved to an adjacent tile (handled by player)
+        // For now, just free them
+      } else {
+        unit.setTrapped(true);
+        this.logEvent(`${unitType} is trapped in a cage!`, 'event');
+      }
+    }
+    
+    if (effects.treasure) {
+      this.gold += 4;
+      tile.treasureCollected = true;
+      this.logEvent(`${unitType} found treasure! +4 gold`, 'event');
+    }
+    
+    if (effects.bomb) {
+      // Bomb trap destroys current and adjacent tiles
+      this.triggerBombEffect(targetX, targetY, 'Bomb Trap');
+    }
+    
+    if (effects.pushed) {
+      // Handle oil slick and pushback
+      const newX = targetX + effects.pushed.dx;
+      const newY = targetY + effects.pushed.dy;
+      
+      if (this.board.isValidPosition(newX, newY)) {
+        const pushTile = this.board.getTile(newX, newY);
+        
+        // Check if pushed into wall
+        if (pushTile.type === TileType.WALL) {
+          if (tile.type === TileType.OIL_SLICK_TRAP) {
+            // Bounce back (reverse direction)
+            this.logEvent(`${unitType} slid into a wall and bounced back!`, 'event');
+          } else {
+            // Pushback into wall - stay on pushback tile
+            this.logEvent(`${unitType} was pushed back but hit a wall!`, 'event');
+          }
+        } else {
+          // Move to pushed position
+          this.board.setTileHasUnit(targetX, targetY, false);
+          unit.moveTo(newX, newY);
+          this.board.setTileHasUnit(newX, newY, true);
+          pushTile.reveal();
+          
+          if (tile.type === TileType.OIL_SLICK_TRAP) {
+            this.logEvent(`${unitType} slid on oil to (${newX}, ${newY})!`, 'event');
+          } else {
+            this.logEvent(`${unitType} was pushed back to (${newX}, ${newY})!`, 'event');
+          }
+          
+          // Apply effects of the new tile
+          const pushEffects = pushTile.applyEffect(unit, effects.pushed);
+          if (pushEffects.killed) {
+            this.logEvent(`${unitType} was killed by ${pushTile.type}!`, 'danger');
+            unit.kill();
+            this.board.setTileHasUnit(newX, newY, false);
+          }
+        }
+      } else {
+        // No tile to push to, stay in place
+        this.logEvent(`${unitType} couldn't be pushed further!`, 'event');
+      }
     }
 
     return { success: true, effects };
+  }
+
+  /**
+   * Reveal an adjacent tile (Scout ability)
+   * @param {string} unitType 
+   * @param {number} targetX 
+   * @param {number} targetY 
+   * @returns {Object}
+   */
+  revealAdjacentTile(unitType, targetX, targetY) {
+    const unit = this.units[unitType];
+    if (!unit || !unit.alive || !unit.hasRevealAbility()) {
+      return { success: false, error: 'Unit cannot reveal tiles' };
+    }
+
+    // Check if target is adjacent
+    const dx = Math.abs(targetX - unit.x);
+    const dy = Math.abs(targetY - unit.y);
+    const isAdjacent = (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
+    
+    if (!isAdjacent) {
+      return { success: false, error: 'Tile must be adjacent' };
+    }
+
+    if (!this.board.isValidPosition(targetX, targetY)) {
+      return { success: false, error: 'Invalid position' };
+    }
+
+    const tile = this.board.getTile(targetX, targetY);
+    if (tile.revealed) {
+      return { success: false, error: 'Tile already revealed' };
+    }
+
+    tile.reveal();
+    this.logEvent(`Scout revealed ${tile.type} at (${targetX}, ${targetY})`, 'offense');
+
+    // Disarm traps (except treasure which still needs collection)
+    if (tile.type !== TileType.TREASURE) {
+      // Mark tile as disarmed by setting it to blank
+      // Actually, per manual: "disarm traps" - we just reveal them, don't change type
+      this.logEvent(`Trap disarmed!`, 'event');
+    }
+
+    return { success: true, tileType: tile.type };
+  }
+
+  /**
+   * Trigger bomb effect at a position (Bomber death or Bomb Trap)
+   * @param {number} x 
+   * @param {number} y 
+   * @param {string} source - Description of what triggered the bomb
+   */
+  triggerBombEffect(x, y, source = 'Bomb') {
+    this.logEvent(`${source} exploded at (${x}, ${y})!`, 'danger');
+    
+    // Get adjacent positions
+    const adjacentPositions = [
+      { x: x + 1, y: y },
+      { x: x - 1, y: y },
+      { x: x, y: y + 1 },
+      { x: x, y: y - 1 }
+    ];
+    
+    // Kill any units on current or adjacent tiles
+    Object.values(this.units).forEach(u => {
+      if (u.alive) {
+        const onBombTile = u.x === x && u.y === y;
+        const onAdjacentTile = adjacentPositions.some(pos => u.x === pos.x && u.y === pos.y);
+        
+        if (onBombTile || onAdjacentTile) {
+          this.logEvent(`${u.type} was killed by the explosion!`, 'danger');
+          
+          // Check if this killed unit is also a Bomber - chain reaction!
+          if (u.hasBombAbility() && (u.x !== x || u.y !== y)) {
+            // Chain reaction - but don't infinite loop
+            this.triggerBombEffect(u.x, u.y, u.type);
+          }
+          
+          u.kill();
+          if (this.board.isValidPosition(u.x, u.y)) {
+            this.board.setTileHasUnit(u.x, u.y, false);
+          }
+        }
+      }
+    });
+    
+    // Optionally: destroy/remove tiles (for now, just reveal them)
+    adjacentPositions.forEach(pos => {
+      if (this.board.isValidPosition(pos.x, pos.y)) {
+        const tile = this.board.getTile(pos.x, pos.y);
+        tile.reveal();
+      }
+    });
   }
 
   /**
