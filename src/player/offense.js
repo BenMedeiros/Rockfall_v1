@@ -111,13 +111,37 @@ export class OffensePlayer {
       return { success: false, error: 'No unit selected' };
     }
 
+    const unit = this.gameState.units[this.selectedUnit];
+    const unitType = this.selectedUnit;
+    
+    // Handle Sprinter's Move 2 ability
+    if (unit.type === 'sprinter') {
+      // Calculate direction from current position to target
+      const dx = targetX - unit.x;
+      const dy = targetY - unit.y;
+      
+      // Normalize direction
+      const dirX = Math.sign(dx);
+      const dirY = Math.sign(dy);
+      
+      // Use moveSprinter for sequential two-step movement
+      const result = this.gameState.moveSprinter(this.selectedUnit, dirX, dirY);
+      
+      if (result.success || result.goldLost) {
+        this.deselectUnit();
+      }
+      
+      return { ...result, unitType };
+    }
+    
+    // Normal unit movement
     const result = this.gameState.moveUnit(this.selectedUnit, targetX, targetY);
     
     if (result.success) {
       this.deselectUnit();
     }
 
-    return result;
+    return { ...result, unitType };
   }
 
   /**

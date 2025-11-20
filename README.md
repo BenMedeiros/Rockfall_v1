@@ -1,10 +1,10 @@
-# Rockfall
+# Dungeon Rush
 
 A turn-based asymmetric strategy board game where two players compete as Defense and Offense.
 
 ## Game Overview
 
-**Rockfall** is a memory-based strategy game where:
+**Dungeon Rush** is a memory-based strategy game where:
 - **Defense** places tiles to create challenging paths
 - **Offense** navigates units through the paths to reach the defense endzone
 - Tiles flip face-down after each turn, creating a memory challenge

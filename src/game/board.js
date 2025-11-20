@@ -1,5 +1,5 @@
 /**
- * Board management system for Rockfall
+ * Board management system for Dungeon Rush
  */
 import { createTile } from './tiles.js';
 
@@ -178,4 +178,103 @@ export class Board {
     );
     return board;
   }
+
+  /**
+   * Destroy tiles at specified positions
+   * @param {Array} positions - Array of {x, y} positions
+   * @returns {Array} Destroyed tiles
+   */
+  destroyTiles(positions) {
+    const destroyed = [];
+    
+    for (const pos of positions) {
+      const tile = this.getTile(pos.x, pos.y);
+      if (tile) {
+        destroyed.push({ ...pos, tile });
+        // Mark tile as destroyed (set to null)
+        if (this.columns[pos.x]) {
+          this.columns[pos.x][pos.y] = null;
+        }
+      }
+    }
+    
+    return destroyed;
+  }
+
+  /**
+   * Shift tiles left to fill gaps after destruction
+   * Removes null tiles and compacts columns
+   * @returns {Object} Mapping of old positions to new positions
+   */
+  shiftTilesLeft() {
+    const positionMap = new Map(); // Map old position to new position
+    
+    // First pass: collect all tiles that need to be moved
+    const tilesToMove = [];
+    for (let y = 0; y < this.totalPaths; y++) {
+      const rowTiles = [];
+      
+      // Collect all non-null tiles in this row
+      for (let x = 0; x <= this.maxColumn; x++) {
+        const tile = this.columns[x] ? this.columns[x][y] : null;
+        if (tile !== null) {
+          rowTiles.push({ tile, oldX: x, y });
+        }
+      }
+      
+      tilesToMove.push(rowTiles);
+    }
+    
+    // Second pass: clear ALL positions first
+    for (let x = 0; x <= this.maxColumn; x++) {
+      if (this.columns[x]) {
+        for (let y = 0; y < this.totalPaths; y++) {
+          this.columns[x][y] = null;
+        }
+      }
+    }
+    
+    // Third pass: place tiles in their new positions
+    for (let y = 0; y < tilesToMove.length; y++) {
+      const rowTiles = tilesToMove[y];
+      
+      for (let newX = 0; newX < rowTiles.length; newX++) {
+        const { tile, oldX } = rowTiles[newX];
+        
+        // Update tile position
+        tile.x = newX;
+        
+        // Store mapping
+        positionMap.set(`${oldX},${y}`, { x: newX, y });
+        
+        // Ensure column exists
+        if (!this.columns[newX]) {
+          this.columns[newX] = new Array(this.totalPaths).fill(null);
+        }
+        
+        // Place tile in new position
+        this.columns[newX][y] = tile;
+      }
+    }
+    
+    // Remove completely empty columns from the end
+    while (this.maxColumn >= 0 && this.isColumnEmpty(this.maxColumn)) {
+      this.columns.pop();
+      this.maxColumn--;
+    }
+    
+    return positionMap;
+  }
+
+  /**
+   * Check if a column is empty (all nulls)
+   * @param {number} x - Column index
+   * @returns {boolean}
+   */
+  isColumnEmpty(x) {
+    if (x < 0 || x >= this.columns.length) return true;
+    const column = this.columns[x];
+    return column.every(tile => tile === null);
+  }
 }
+

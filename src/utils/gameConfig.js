@@ -1,5 +1,5 @@
 /**
- * Game configuration and setup structures for Rockfall
+ * Game configuration and setup structures for Dungeon Rush
  */
 
 // Tile types enum

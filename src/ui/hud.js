@@ -1,11 +1,13 @@
 /**
  * HUD (Heads-Up Display) management
  */
-import { getTileDisplayName, getUnitDisplayName, GamePhase } from '../utils/gameConfig.js';
+import { getTileDisplayName, getUnitDisplayName, GamePhase, TileType } from '../utils/gameConfig.js';
+import { getImageLoader } from '../utils/imageLoader.js';
 
 export class HUD {
   constructor(gameState) {
     this.gameState = gameState;
+    this.imageLoader = getImageLoader();
     
     // DOM elements
     this.elements = {
@@ -13,7 +15,7 @@ export class HUD {
       phaseIndicator: document.getElementById('phaseIndicator'),
       goldAmount: document.getElementById('goldAmount'),
       goldIncome: document.getElementById('goldIncome'),
-      tilesRemainingList: document.getElementById('tilesRemainingList'),
+      tileBagList: document.getElementById('tileBagList'),
       currentDrawTiles: document.getElementById('currentDrawTiles'),
       unitsRosterList: document.getElementById('unitsRosterList'),
       actionLogContent: document.getElementById('actionLogContent'),
@@ -87,20 +89,24 @@ export class HUD {
   }
 
   /**
-   * Update tiles remaining display
+   * Update tile bag display
    */
   updateTilesRemaining() {
     const remaining = this.gameState.tileBag.getRemainingCounts();
     const html = Object.entries(remaining)
-      .map(([type, count]) => `
-        <li>
-          <span>${getTileDisplayName(type)}:</span>
-          <strong>${count}</strong>
-        </li>
-      `)
+      .map(([type, count]) => {
+        const iconSrc = this.getTileIconSrc(type);
+        return `
+          <div class="tile-bag-item">
+            <img src="${iconSrc}" alt="${type}" class="tile-icon" />
+            <span>${getTileDisplayName(type)}:</span>
+            <strong>${count}</strong>
+          </div>
+        `;
+      })
       .join('');
     
-    this.elements.tilesRemainingList.innerHTML = html || '<li>No tiles remaining</li>';
+    this.elements.tileBagList.innerHTML = html || '<p>No tiles remaining</p>';
   }
 
   /**
@@ -114,27 +120,28 @@ export class HUD {
       return;
     }
 
-    // Count how many of each tile type are available
-    const tileTypeCounts = {};
-    tiles.forEach(tile => {
-      tileTypeCounts[tile] = (tileTypeCounts[tile] || 0) + 1;
+    // Create array with assignment status for each tile
+    const assignedSet = new Set(assignments.values());
+    const tileItems = [];
+    const assignedTiles = [];
+    
+    tiles.forEach(tileType => {
+      const iconSrc = this.getTileIconSrc(tileType);
+      tileItems.push({ tileType, iconSrc, assigned: false });
+    });
+    
+    // Mark assigned tiles
+    Array.from(assignments.values()).forEach(assignedType => {
+      const index = tileItems.findIndex(item => item.tileType === assignedType && !item.assigned);
+      if (index !== -1) {
+        tileItems[index].assigned = true;
+      }
     });
 
-    // Count how many have been assigned
-    const assignedCounts = {};
-    Array.from(assignments.values()).forEach(tile => {
-      assignedCounts[tile] = (assignedCounts[tile] || 0) + 1;
-    });
-
-    const html = Object.entries(tileTypeCounts).map(([tileType, totalCount]) => {
-      const assignedCount = assignedCounts[tileType] || 0;
-      const remainingCount = totalCount - assignedCount;
-      const allPlaced = remainingCount === 0;
-      
+    const html = tileItems.map(({ tileType, iconSrc, assigned }) => {
       return `
-        <div class="draw-tile-item ${allPlaced ? 'placed' : ''}" data-tile="${tileType}">
-          <span>${getTileDisplayName(tileType)}</span>
-          <span>${allPlaced ? 'Placed' : `x${remainingCount}`}</span>
+        <div class="draw-tile-item ${assigned ? 'placed' : ''}" data-tile="${tileType}">
+          <img src="${iconSrc}" alt="${tileType}" class="tile-icon" />
         </div>
       `;
     }).join('');
@@ -235,5 +242,24 @@ export class HUD {
    */
   clearCurrentDraw() {
     this.elements.currentDrawTiles.innerHTML = '<p>No tiles drawn</p>';
+  }
+
+  /**
+   * Get tile icon source path
+   * @param {string} tileType 
+   * @returns {string}
+   */
+  getTileIconSrc(tileType) {
+    const images = {
+      [TileType.BLANK]: 'img/empty.png',
+      [TileType.SPIKE_TRAP]: 'img/trap_spikes.png',
+      [TileType.CAGE_TRAP]: 'img/trap_cage.png',
+      [TileType.OIL_SLICK_TRAP]: 'img/trap_oilslick.png',
+      [TileType.PUSHBACK_TRAP]: 'img/trap_pushback.png',
+      [TileType.BOMB_TRAP]: 'img/trap_bomb.png',
+      [TileType.WALL]: 'img/wall.png',
+      [TileType.TREASURE]: 'img/treasure.png'
+    };
+    return images[tileType] || 'img/empty.png';
   }
 }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rockfall - Asymmetric Strategy Game</title>
+    <title>Dungeon Rush - Asymmetric Strategy Game</title>
     <link rel="icon" type="image/svg+xml" href="favicon.ico">
     <link rel="stylesheet" href="styles/main.css">
 </head>
@@ -11,7 +11,7 @@
     <div id="app">
         <!-- Header -->
         <header class="game-header">
-            <h1>ROCKFALL</h1>
+            <h1>DUNGEON RUSH</h1>
             <div class="game-info">
                 <span id="turnCounter">Turn: 1</span>
                 <span id="phaseIndicator">Defense Phase</span>
@@ -25,9 +25,9 @@
                 <!-- Defense Panel -->
                 <div id="defensePanel" class="player-panel">
                     <h2>Defense</h2>
-                    <div class="tiles-remaining">
-                        <h3>Tiles Remaining:</h3>
-                        <ul id="tilesRemainingList"></ul>
+                    <div class="tile-bag">
+                        <h3 class="collapsible-header" id="tileBagHeader">Tile Bag <span class="collapse-icon">▼</span></h3>
+                        <div id="tileBagList" class="tile-bag-content"></div>
                     </div>
                     <div class="current-draw">
                         <h3>Current Draw:</h3>

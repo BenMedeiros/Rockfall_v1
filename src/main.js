@@ -1,5 +1,5 @@
 /**
- * Rockfall - Main entry point
+ * Dungeon Rush - Main entry point
  */
 import { createGameSetup, validateGameConfig } from './utils/gameConfig.js';
 import { GameState } from './game/gameState.js';
@@ -10,7 +10,7 @@ import { HUD } from './ui/hud.js';
 import { Controls } from './ui/controls.js';
 import { getImageLoader } from './utils/imageLoader.js';
 
-class RockfallGame {
+class DungeonRushGame {
   constructor() {
     this.config = null;
     this.gameState = null;
@@ -26,7 +26,7 @@ class RockfallGame {
    * @param {Object} customConfig - Optional custom configuration
    */
   init(customConfig = {}) {
-    console.log('Initializing Rockfall...');
+    console.log('Initializing Dungeon Rush...');
     
     // Create game configuration
     const seed = Date.now();
@@ -67,7 +67,7 @@ class RockfallGame {
     // Start the game
     this.start();
     
-    console.log('Rockfall initialized successfully!');
+    console.log('Dungeon Rush initialized successfully!');
   }
 
   /**
@@ -125,7 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   console.log('Creating game...');
   
-  const game = new RockfallGame();
+  const game = new DungeonRushGame();
   
   // You can customize the game config here
   const customConfig = {
@@ -142,5 +142,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   game.init(customConfig);
   
   // Expose game instance for debugging
-  window.rockfallGame = game;
+  window.dungeonRushGame = game;
 });

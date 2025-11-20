@@ -1,4 +1,4 @@
-/* Rockfall - Main Styles */
+/* Dungeon Rush - Main Styles */
 
 :root {
     --bg-dark: #1a1a2e;
@@ -95,16 +95,52 @@ body {
 }
 
 /* Defense Panel */
-.tiles-remaining ul {
-    list-style: none;
+.tile-bag {
     margin-bottom: 1rem;
 }
 
-.tiles-remaining li {
+.collapsible-header {
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     padding: 0.5rem;
+    background-color: var(--bg-light);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+.collapsible-header:hover {
+    background-color: var(--accent-secondary);
+}
+
+.collapse-icon {
+    transition: transform 0.3s;
+}
+
+.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+}
+
+.tile-bag-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.tile-bag-content.hidden {
+    display: none;
+}
+
+.tile-bag-item {
+    /* padding removed - tile images have padding */
     margin: 0.25rem 0;
     background-color: var(--bg-light);
     border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .current-draw {
@@ -120,21 +156,28 @@ body {
 
 .tile-draw-container {
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 0.5rem;
     margin-bottom: 1rem;
 }
 
 .draw-tile-item {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
-    padding: 0.5rem;
+    /* padding removed - tile images have padding */
     background-color: var(--bg-light);
     border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.2s;
     border: 2px solid transparent;
+}
+
+.tile-icon {
+    width: 70px;
+    height: 70px;
+    object-fit: contain;
+    vertical-align: middle;
 }
 
 .draw-tile-item:hover:not(.placed) {

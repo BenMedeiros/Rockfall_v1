@@ -169,9 +169,10 @@ export class GameState {
    * @param {string} unitType 
    * @param {number} targetX 
    * @param {number} targetY 
+   * @param {boolean} isSprinterSecondMove - If true, this is the second move of a Sprinter Move 2
    * @returns {Object} { success: boolean, error: string, effects: Object }
    */
-  moveUnit(unitType, targetX, targetY) {
+  moveUnit(unitType, targetX, targetY, isSprinterSecondMove = false) {
     const unit = this.units[unitType];
     if (!unit) {
       return { success: false, error: 'Invalid unit type' };
@@ -185,7 +186,7 @@ export class GameState {
       return { success: false, error: 'Unit is trapped' };
     }
 
-    const cost = unit.getMoveCost(this.config);
+    const cost = isSprinterSecondMove ? 0 : unit.getMoveCost(this.config);
     if (this.gold < cost) {
       return { success: false, error: 'Not enough gold' };
     }
@@ -206,11 +207,21 @@ export class GameState {
     }
     
     // Check if target position is occupied by another unit
+    // Exception: allow moving onto cage trap tiles with trapped units (to free them)
+    const targetTile = this.board.getTile(targetX, targetY);
     const targetOccupied = Object.values(this.units).some(u => 
       u.alive && u !== unit && u.x === targetX && u.y === targetY
     );
+    
     if (targetOccupied) {
-      return { success: false, error: 'Target position occupied by another unit' };
+      // Check if it's a cage trap with a trapped unit - this is allowed
+      const occupyingUnit = Object.values(this.units).find(u => 
+        u.alive && u !== unit && u.x === targetX && u.y === targetY
+      );
+      
+      if (!(targetTile && targetTile.type === TileType.CAGE_TRAP && occupyingUnit.trapped)) {
+        return { success: false, error: 'Target position occupied by another unit' };
+      }
     }
 
     // Check if reached defense endzone (win condition)
@@ -254,7 +265,7 @@ export class GameState {
         this.board.setTileHasUnit(oldX, oldY, true);
       }
       this.logEvent(`${unitType} discovered a wall at (${targetX}, ${targetY})! Movement blocked (lost ${cost} gold)`, 'event');
-      return { success: false, error: 'Movement blocked by wall', goldLost: true };
+      return { success: false, error: 'Movement blocked by wall', goldLost: true, sprinterStop: true };
     }
     
     // Movement successful, mark tile as occupied
@@ -276,6 +287,7 @@ export class GameState {
       
       unit.kill();
       this.board.setTileHasUnit(targetX, targetY, false);
+      return { success: true, effects: { ...effects, sprinterStop: true } };
     }
 
     if (effects.trapped) {
@@ -295,21 +307,24 @@ export class GameState {
         unit.setTrapped(true);
         this.logEvent(`${unitType} is trapped in a cage!`, 'event');
       }
+      return { success: true, effects: { ...effects, sprinterStop: true } };
     }
     
     if (effects.treasure) {
       this.gold += 4;
       tile.treasureCollected = true;
       this.logEvent(`${unitType} found treasure! +4 gold`, 'event');
+      // Treasure does NOT stop Sprinter's second move
     }
     
     if (effects.bomb) {
       // Bomb trap destroys current and adjacent tiles
-      this.triggerBombEffect(targetX, targetY, 'Bomb Trap');
+      const bombAnimData = this.triggerBombEffect(targetX, targetY, 'Bomb Trap');
+      return { success: true, effects: { ...effects, sprinterStop: true, bombAnimData } };
     }
     
     if (effects.pushed) {
-      // Handle oil slick and pushback
+      // Handle oil slick and pushback - these stop Sprinter
       const newX = targetX + effects.pushed.dx;
       const newY = targetY + effects.pushed.dy;
       
@@ -350,9 +365,59 @@ export class GameState {
         // No tile to push to, stay in place
         this.logEvent(`${unitType} couldn't be pushed further!`, 'event');
       }
+      return { success: true, effects: { ...effects, sprinterStop: true } };
     }
 
     return { success: true, effects };
+  }
+
+  /**
+   * Move a Sprinter unit (Move 2 - sequential moves)
+   * @param {string} unitType 
+   * @param {number} directionX - Direction X (-1, 0, 1)
+   * @param {number} directionY - Direction Y (0 or 1)
+   * @returns {Object}
+   */
+  moveSprinter(unitType, directionX, directionY) {
+    const unit = this.units[unitType];
+    if (!unit || !unit.alive || unit.type !== 'sprinter') {
+      return { success: false, error: 'Invalid sprinter unit' };
+    }
+
+    // Calculate first target position
+    const firstTargetX = unit.x + directionX;
+    const firstTargetY = unit.y + directionY;
+
+    // Execute first move
+    const firstMove = this.moveUnit(unitType, firstTargetX, firstTargetY, false);
+    
+    // If first move failed or had stopping effects, return
+    if (!firstMove.success || firstMove.effects?.sprinterStop) {
+      return firstMove;
+    }
+
+    // If unit died, don't try second move
+    if (!unit.alive) {
+      return firstMove;
+    }
+
+    // Calculate second target position (continue in same direction)
+    const secondTargetX = unit.x + directionX;
+    const secondTargetY = unit.y + directionY;
+
+    // Execute second move (no cost)
+    const secondMove = this.moveUnit(unitType, secondTargetX, secondTargetY, true);
+    
+    // Combine effects from both moves
+    return {
+      success: secondMove.success,
+      error: secondMove.error,
+      effects: {
+        ...secondMove.effects,
+        firstMove: firstMove.effects,
+        secondMove: secondMove.effects
+      }
+    };
   }
 
   /**
@@ -408,21 +473,21 @@ export class GameState {
   triggerBombEffect(x, y, source = 'Bomb') {
     this.logEvent(`${source} exploded at (${x}, ${y})!`, 'danger');
     
-    // Get adjacent positions
-    const adjacentPositions = [
+    // Get all positions affected by bomb (center + 4 adjacent)
+    const affectedPositions = [
+      { x, y }, // Center
       { x: x + 1, y: y },
       { x: x - 1, y: y },
       { x: x, y: y + 1 },
       { x: x, y: y - 1 }
-    ];
+    ].filter(pos => this.board.isValidPosition(pos.x, pos.y));
     
-    // Kill any units on current or adjacent tiles
+    // Kill any units on affected tiles
     Object.values(this.units).forEach(u => {
       if (u.alive) {
-        const onBombTile = u.x === x && u.y === y;
-        const onAdjacentTile = adjacentPositions.some(pos => u.x === pos.x && u.y === pos.y);
+        const onAffectedTile = affectedPositions.some(pos => u.x === pos.x && u.y === pos.y);
         
-        if (onBombTile || onAdjacentTile) {
+        if (onAffectedTile) {
           this.logEvent(`${u.type} was killed by the explosion!`, 'danger');
           
           // Check if this killed unit is also a Bomber - chain reaction!
@@ -439,13 +504,33 @@ export class GameState {
       }
     });
     
-    // Optionally: destroy/remove tiles (for now, just reveal them)
-    adjacentPositions.forEach(pos => {
-      if (this.board.isValidPosition(pos.x, pos.y)) {
-        const tile = this.board.getTile(pos.x, pos.y);
-        tile.reveal();
+    // Destroy tiles (center + adjacent)
+    this.board.destroyTiles(affectedPositions);
+    this.logEvent(`${affectedPositions.length} tiles destroyed by explosion`, 'event');
+    
+    // Shift remaining tiles left
+    const positionMap = this.board.shiftTilesLeft();
+    
+    // Update unit positions based on shift
+    Object.values(this.units).forEach(u => {
+      if (u.alive) {
+        const oldKey = `${u.x},${u.y}`;
+        const newPos = positionMap.get(oldKey);
+        if (newPos) {
+          u.x = newPos.x;
+          u.y = newPos.y;
+        }
       }
     });
+    
+    this.logEvent('Tiles shifted left to fill gaps', 'event');
+    
+    // Return animation data
+    return {
+      explosionCenter: { x, y },
+      affectedPositions,
+      positionMap
+    };
   }
 
   /**

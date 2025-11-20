@@ -2,6 +2,7 @@
  * UI Controls - Handle user input and interactions
  */
 import { GamePhase } from '../utils/gameConfig.js';
+import { getSettings } from '../utils/settings.js';
 
 export class Controls {
   constructor(gameState, defensePlayer, offensePlayer, renderer, hud) {
@@ -10,10 +11,13 @@ export class Controls {
     this.offensePlayer = offensePlayer;
     this.renderer = renderer;
     this.hud = hud;
+    this.settings = getSettings();
     
     // State
     this.selectedRow = null; // For defense tile placement
     this.selectedTileType = null; // Currently selected tile to place
+    this.scoutRevealMode = false; // Whether Scout is selecting tile to reveal
+    this.scoutUnit = null; // Scout unit waiting to reveal
     
     this.setupEventListeners();
   }
@@ -57,6 +61,25 @@ export class Controls {
     this.renderer.canvas.addEventListener('mousemove', this.handleCanvasMouseMove.bind(this));
     this.renderer.canvas.addEventListener('mouseleave', this.handleCanvasMouseLeave.bind(this));
     this.renderer.canvas.addEventListener('click', this.handleCanvasClick.bind(this));
+    
+    // Tile bag collapse
+    const tileBagHeader = document.getElementById('tileBagHeader');
+    const tileBagContent = document.getElementById('tileBagList');
+    if (tileBagHeader) {
+      // Load saved collapse state
+      const isCollapsed = this.settings.get('ui.tileBag.isCollapsed');
+      if (isCollapsed) {
+        tileBagContent.classList.add('hidden');
+        tileBagHeader.classList.add('collapsed');
+      }
+      
+      tileBagHeader.addEventListener('click', () => {
+        tileBagContent.classList.toggle('hidden');
+        tileBagHeader.classList.toggle('collapsed');
+        // Save the new state
+        this.settings.set('ui.tileBag.isCollapsed', tileBagContent.classList.contains('hidden'));
+      });
+    }
     
     // Defense turn button
     document.getElementById('endDefenseTurnBtn').addEventListener('click', 
@@ -223,6 +246,12 @@ export class Controls {
    * Handle click during offense phase
    */
   handleOffenseClick(tile) {
+    // Check if Scout is selecting tile to reveal
+    if (this.scoutRevealMode) {
+      this.handleScoutRevealClick(tile);
+      return;
+    }
+    
     const selectedUnit = this.offensePlayer.getSelectedUnit();
     
     if (!selectedUnit) {
@@ -236,7 +265,8 @@ export class Controls {
         const moveCost = clickedUnit.getMoveCost(this.gameState.config);
         if (this.gameState.gold < moveCost) {
           console.log(`Cannot select unit - need ${moveCost} gold but only have ${this.gameState.gold}`);
-          this.hud.logMessage(`Not enough gold to move ${clickedUnit.type} (need ${moveCost}, have ${this.gameState.gold})`, 'error');
+          this.gameState.logEvent(`Not enough gold to move ${clickedUnit.type} (need ${moveCost}, have ${this.gameState.gold})`, 'error');
+          this.hud.updateActionLog();
           return;
         }
         
@@ -248,27 +278,164 @@ export class Controls {
       }
     } else {
       // Try to move selected unit to clicked tile
-      const result = this.offensePlayer.moveSelectedUnit(tile.x, tile.y);
+      const unit = this.offensePlayer.getSelectedUnit();
       
-      if (result.success) {
-        this.renderer.clearHighlightedTiles();
-        this.renderer.render();
-        this.hud.updateAll();
-        
-        if (result.effects && result.effects.win) {
-          // Render again to show revealed tiles
-          this.renderer.render();
-          this.hud.showGameOver('offense');
-        }
+      if (!unit) {
+        console.error('No unit selected');
+        return;
+      }
+      
+      const targetTile = this.gameState.board.getTile(tile.x, tile.y);
+      
+      // Check if tile is not yet revealed and should be revealed (not a Jump move)
+      const dx = tile.x - unit.x;
+      const dy = tile.y - unit.y;
+      const shouldAnimateReveal = targetTile && !targetTile.revealed && !unit.isJumpMove(dx, dy);
+      
+      if (shouldAnimateReveal) {
+        // Animate tile reveal first
+        this.renderer.animateTileReveal(tile.x, tile.y, () => {
+          // Add delay after flip before moving unit
+          setTimeout(() => {
+            // Capture position BEFORE the move updates it
+            const fromX = unit.x;
+            const fromY = unit.y;
+            const toX = tile.x;
+            const toY = tile.y;
+            
+            // Special handling for sprinter's Move 2 ability
+            if (unit.type === 'sprinter') {
+              this.handleSprinterMove(unit, fromX, fromY, toX, toY);
+            } else {
+              // Perform the move (this updates unit.x and unit.y)
+              const result = this.offensePlayer.moveSelectedUnit(toX, toY);
+              
+              if (result.success) {
+                // Animate unit movement from old position to new position
+                this.renderer.animateUnitMove(unit, fromX, fromY, toX, toY, () => {
+                  // After movement animation, handle bomb effects if any
+                  this.handleMoveResult(result);
+                });
+              } else {
+                this.handleMoveFailure(result);
+              }
+            }
+          }, 300); // 300ms delay after flip
+        });
       } else {
-        console.error('Move failed:', result.error);
+        // No reveal animation needed, but still animate unit movement
+        const fromX = unit.x;
+        const fromY = unit.y;
+        const toX = tile.x;
+        const toY = tile.y;
         
-        // Update UI even on failure (gold may have been spent for boulder)
-        if (result.goldLost) {
-          this.renderer.render();
-          this.hud.updateAll();
+        // Special handling for sprinter's Move 2 ability
+        if (unit.type === 'sprinter') {
+          this.handleSprinterMove(unit, fromX, fromY, toX, toY);
+        } else {
+          const result = this.offensePlayer.moveSelectedUnit(toX, toY);
+          
+          if (result.success) {
+            this.renderer.animateUnitMove(unit, fromX, fromY, toX, toY, () => {
+              this.handleMoveResult(result);
+            });
+          } else {
+            this.handleMoveFailure(result);
+          }
         }
       }
+    }
+  }
+  
+  /**
+   * Handle sprinter's two-step movement with animation
+   * @param {Unit} unit 
+   * @param {number} fromX 
+   * @param {number} fromY 
+   * @param {number} toX 
+   * @param {number} toY 
+   */
+  handleSprinterMove(unit, fromX, fromY, toX, toY) {
+    // Calculate direction
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const dirX = Math.sign(dx);
+    const dirY = Math.sign(dy);
+    
+    // Calculate intermediate position (first move)
+    const midX = fromX + dirX;
+    const midY = fromY + dirY;
+    
+    // Perform the sprinter move (does both steps internally)
+    const result = this.offensePlayer.moveSelectedUnit(toX, toY);
+    
+    if (result.success) {
+      // Animate first step
+      this.renderer.animateUnitMove(unit, fromX, fromY, midX, midY, () => {
+        // Then animate second step
+        this.renderer.animateUnitMove(unit, midX, midY, toX, toY, () => {
+          this.handleMoveResult(result);
+        });
+      });
+    } else {
+      this.handleMoveFailure(result);
+    }
+  }
+
+  /**
+   * Handle successful move result
+   * @param {Object} result 
+   */
+  handleMoveResult(result) {
+    this.renderer.clearHighlightedTiles();
+    
+    // Check if Scout needs to reveal adjacent tile
+    if (result.unitType) {
+      const unit = this.gameState.units[result.unitType];
+      if (unit && unit.hasRevealAbility() && unit.alive) {
+        // Prompt player to select adjacent tile to reveal
+        this.promptScoutReveal(unit);
+        return;
+      }
+    }
+    
+    // Check if bomb animation is needed
+    if (result.effects?.bombAnimData) {
+      const { explosionCenter, affectedPositions, positionMap } = result.effects.bombAnimData;
+      
+      // Trigger explosion animation
+      this.renderer.animateExplosion(explosionCenter.x, explosionCenter.y, affectedPositions, () => {
+        // After explosion, trigger tile slide animation
+        this.renderer.animateTileSlide(positionMap, () => {
+          // After both animations, update UI
+          this.renderer.render();
+          this.hud.updateAll();
+        });
+      });
+    } else {
+      // No bomb, just render normally
+      this.renderer.render();
+      this.hud.updateAll();
+    }
+    
+    if (result.effects && result.effects.win) {
+      // Render again to show revealed tiles
+      this.renderer.render();
+      this.hud.showGameOver('offense');
+    }
+  }
+
+  /**
+   * Handle failed move
+   * @param {Object} result 
+   */
+  handleMoveFailure(result) {
+    console.error('Move failed:', result.error);
+    
+    // Update UI even on failure (gold may have been spent for wall)
+    if (result.goldLost) {
+      this.renderer.render();
+      this.hud.updateAll();
     }
   }
 
@@ -460,4 +627,68 @@ export class Controls {
       });
     }
   }
+
+  /**
+   * Prompt Scout to select adjacent tile to reveal
+   * @param {Unit} unit - Scout unit
+   */
+  promptScoutReveal(unit) {
+    this.scoutRevealMode = true;
+    this.scoutUnit = unit;
+    
+    // Get adjacent tiles
+    const adjacentTiles = [
+      { x: unit.x + 1, y: unit.y },
+      { x: unit.x - 1, y: unit.y },
+      { x: unit.x, y: unit.y + 1 },
+      { x: unit.x, y: unit.y - 1 }
+    ].filter(pos => this.gameState.board.isValidPosition(pos.x, pos.y));
+    
+    // Highlight adjacent tiles
+    this.renderer.setHighlightedTiles(adjacentTiles);
+    this.renderer.render();
+    
+    // Show message
+    this.gameState.logEvent('Scout: Select an adjacent tile to reveal (Reveal 1)', 'event');
+    this.hud.updateActionLog();
+  }
+
+  /**
+   * Handle Scout reveal tile selection
+   * @param {Object} tile - Selected tile coordinates
+   */
+  handleScoutRevealClick(tile) {
+    // Check if tile is adjacent to Scout
+    const dx = Math.abs(tile.x - this.scoutUnit.x);
+    const dy = Math.abs(tile.y - this.scoutUnit.y);
+    const isAdjacent = (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
+    
+    if (!isAdjacent) {
+      this.gameState.logEvent('Please select an adjacent tile', 'error');
+      this.hud.updateActionLog();
+      return;
+    }
+    
+    // Reveal the tile
+    const result = this.gameState.revealAdjacentTile(this.scoutUnit.type, tile.x, tile.y);
+    
+    if (result.success) {
+      this.gameState.logEvent(`Scout revealed tile at (${tile.x}, ${tile.y})`, 'event');
+      this.hud.updateActionLog();
+      
+      // Animate the reveal
+      this.renderer.animateTileReveal(tile.x, tile.y, () => {
+        // Clear Scout reveal mode
+        this.scoutRevealMode = false;
+        this.scoutUnit = null;
+        this.renderer.clearHighlightedTiles();
+        this.renderer.render();
+        this.hud.updateAll();
+      });
+    } else {
+      this.gameState.logEvent(result.error || 'Cannot reveal this tile', 'error');
+      this.hud.updateActionLog();
+    }
+  }
 }
+
